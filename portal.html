@@ -2462,14 +2462,19 @@ const NAV_ITEMS = [{
     live: true
   }]
 }, {
-  key: "report-all",
-  label: "Báo cáo tổng hợp",
+  key: "report-orders",
+  label: "Báo cáo đơn hàng",
   icon: "chart",
   live: true
 }, {
-  key: "report-orders",
-  label: "Báo cáo phát hành voucher",
-  icon: "chartPie",
+  key: "report-vouchers",
+  label: "Báo cáo quản lý vouchers",
+  icon: "ticket",
+  live: true
+}, {
+  key: "report-behavior",
+  label: "Báo cáo theo dõi hành vi",
+  icon: "users",
   live: true
 }];
 
@@ -3580,119 +3585,119 @@ const TYPE_LABEL = {
 // Consolidated report rows (completed orders + active/ended events)
 // totalValue = tổng tiền issue; redeemValue = tổng tiền redeem; expiredValue = tổng tiền hết hạn
 // remainingValue = totalValue - redeemValue - expiredValue
-const CONSOLIDATED_REPORT = (() => {
+// ─── Report data ────────────────────────────────────────────────────────────
+
+const REPORT_NAMES = ["Nguyễn Văn An", "Trần Thị Mai", "Lê Hải Đăng", "Phạm Gia Huy", "Hoàng Văn Long", "Đỗ Thị Lan", "Vũ Minh Tuấn", "Bùi Thị Hoa", "Ngô Quốc Bảo", "Lý Thị Thu"];
+const REPORT_PHONES = ["0912345678", "0987654321", "0909123456", "0976543210", "0938765432", "0961234567", "0945678901", "0978901234", "0923456789", "0956789012", "0912345679", "0987654322", "0909123457", "0976543211", "0938765433"];
+
+// Report 1: Báo cáo đơn hàng — 1 row = 1 order
+const ORDER_REPORT = (() => {
+  const now = new Date("2026-06-12");
+  const usedRatios = [0.72, 0.45, 0.88, 0.60, 0.15, 0.91, 0.33, 0.77, 0.50, 0.22, 0.68, 0.40, 0.85, 0.55, 0.10];
+  return EVC_ORDERS.map((o, i) => {
+    const usedCount = o.issuedDone ? Math.round(o.issuedDone * usedRatios[i % usedRatios.length]) : 0;
+    const unusedCount = o.issuedDone - usedCount;
+    const unusedRatio = o.issuedDone > 0 ? unusedCount / o.issuedDone : 0;
+    const [dd, mm, yy] = (o.created || "01/01/2025").split(" ")[0].split("/");
+    const createdDate = new Date(`${yy}-${mm}-${dd}`);
+    const monthsOld = (now - createdDate) / (1000 * 60 * 60 * 24 * 30);
+    const flagged = o.issuedDone > 0 && unusedRatio >= 0.20 && monthsOld >= 2;
+    return {
+      ...o,
+      usedCount,
+      unusedCount,
+      unusedRatio,
+      flagged
+    };
+  });
+})();
+
+// Report 2: Báo cáo quản lý vouchers — 1 row = 1 voucher ID
+const VOUCHER_REPORT = (() => {
   const rows = [];
-  const redeemRatios = [0.65, 0.42, 0.78, 0.55, 0.30, 0.88, 0.50, 0.72, 0.60, 0.35];
-  const expiredRatios = [0.10, 0.18, 0.08, 0.15, 0.25, 0.05, 0.12, 0.10, 0.20, 0.14];
-  let idx = 0;
-  EVC_ORDERS.filter(o => o.status === "hoan_thanh").forEach(o => {
-    const ri = idx % 10;
-    const redeemValue = Math.round(o.totalValue * redeemRatios[ri] / 1000) * 1000;
-    const expiredValue = Math.round(o.totalValue * expiredRatios[ri] / 1000) * 1000;
-    rows.push({
-      id: "c_" + o.id,
-      po: o.po,
-      name: o.name,
-      type: "evoucher",
-      voucherCount: o.voucherCount,
-      totalValue: o.totalValue,
-      redeemValue,
-      expiredValue,
-      remainingValue: o.totalValue - redeemValue - expiredValue,
-      creator: o.creator
-    });
-    idx++;
-  });
-  PAPER_ORDERS.filter(o => o.orderStatus === "hoan_thanh").forEach(o => {
-    const ri = idx % 10;
-    const redeemValue = Math.round(o.totalValue * redeemRatios[ri] / 1000) * 1000;
-    const expiredValue = Math.round(o.totalValue * expiredRatios[ri] / 1000) * 1000;
-    rows.push({
-      id: "c_" + o.id,
-      po: o.po,
-      name: o.name,
-      type: "paper",
-      voucherCount: o.voucherCount,
-      totalValue: o.totalValue,
-      redeemValue,
-      expiredValue,
-      remainingValue: o.totalValue - redeemValue - expiredValue,
-      creator: o.creator
-    });
-    idx++;
-  });
-  EVENT_SEED.filter(e => e.status === "dang_hoat_dong" || e.status === "da_ket_thuc").forEach(e => {
-    const ri = idx % 10;
-    const redeemValue = Math.round(e.totalValue * redeemRatios[ri] / 1000) * 1000;
-    const expiredValue = Math.round(e.totalValue * expiredRatios[ri] / 1000) * 1000;
-    rows.push({
-      id: "c_" + e.id,
-      po: e.po,
-      name: e.name,
-      type: "event",
-      voucherCount: e.issuedCount,
-      totalValue: e.totalValue,
-      redeemValue,
-      expiredValue,
-      remainingValue: e.totalValue - redeemValue - expiredValue,
-      creator: e.creator
-    });
-    idx++;
+  let vid = 10001;
+  const VSTATUS = ["issued", "used", "expired", "used", "issued", "used", "used", "expired", "issued", "used"];
+  const VSTATUS_LABEL = {
+    issued: "Đã phát hành",
+    used: "Đã sử dụng",
+    expired: "Hết hạn"
+  };
+  EVC_ORDERS.filter(o => o.issuedDone > 0).forEach((o, oi) => {
+    const count = Math.min(o.issuedDone, 8);
+    for (let k = 0; k < count; k++) {
+      const phi = (oi * 7 + k * 3) % REPORT_PHONES.length;
+      const nmi = (oi + k) % REPORT_NAMES.length;
+      const [dd, mm, yy] = (o.created || "01/05/2025").split(" ")[0].split("/");
+      const issued = new Date(`${yy}-${mm}-${dd}`);
+      issued.setDate(issued.getDate() + k * 3);
+      const expiry = new Date(issued);
+      expiry.setMonth(expiry.getMonth() + 3);
+      const fmt = d => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+      rows.push({
+        id: "VC-" + String(vid++).padStart(8, "0"),
+        orderId: o.code,
+        orderName: o.name,
+        po: o.po,
+        recipientName: REPORT_NAMES[nmi],
+        recipientPhone: REPORT_PHONES[phi],
+        faceValue: o.faceValue || 100000,
+        issueDate: fmt(issued),
+        expiryDate: fmt(expiry),
+        status: VSTATUS[(oi + k) % VSTATUS.length],
+        statusLabel: VSTATUS_LABEL[VSTATUS[(oi + k) % VSTATUS.length]]
+      });
+    }
   });
   return rows;
 })();
 
-// Issuance line-items (one row per recipient/voucher) from completed e-voucher + paper + events
-const ISSUANCE_RECORDS = (() => {
-  const rows = [];
-  let n = 12345;
-  const mkTime = (i, k) => {
-    const d = 1 + (i * 3 + k) % 27,
-      mo = 1 + (i + k) % 6;
-    return `${String(d).padStart(2, "0")}/${String(mo).padStart(2, "0")}/2025 ${String(9 + (i + k) % 9).padStart(2, "0")}:${String((i * 7 + k * 11) % 60).padStart(2, "0")}:${String(k * 13 % 60).padStart(2, "0")}`;
-  };
-  const VOUCHER_STATUSES = ["issue", "redeem", "expired", "redeem", "issue", "redeem", "redeem", "expired", "issue", "redeem"];
-  const push = (po, name, type, r, qty, face, i, k) => rows.push({
-    id: "iss_" + n,
-    time: mkTime(i, k),
-    po,
-    name,
-    type,
-    rName: r.name,
-    rEmail: r.email || "—",
-    rPhone: r.phone || "—",
-    qty,
-    faceValue: face,
-    txnRef: "TXN-2025-" + String(n++).padStart(8, "0"),
-    voucherStatus: VOUCHER_STATUSES[(i + k) % VOUCHER_STATUSES.length]
+// Report 3: Báo cáo theo dõi hành vi — 1 row = 1 end-user (phone)
+const BEHAVIOR_REPORT = (() => {
+  const map = {};
+  VOUCHER_REPORT.forEach(v => {
+    const key = v.recipientPhone;
+    if (!map[key]) map[key] = {
+      phone: key,
+      name: v.recipientName,
+      total: 0,
+      used: 0,
+      expired: 0,
+      orders: new Set(),
+      pos: new Set()
+    };
+    const u = map[key];
+    u.total++;
+    if (v.status === "used") u.used++;
+    if (v.status === "expired") u.expired++;
+    u.orders.add(v.orderId);
+    u.pos.add(v.po);
   });
-  EVC_ORDERS.filter(o => o.status === "hoan_thanh").forEach((o, i) => {
-    (o.recipientsSample || []).forEach((r, k) => push(o.po, o.name, "evoucher", r, r.qty, o.faceValue, i, k));
-  });
-  PAPER_ORDERS.filter(o => o.orderStatus === "hoan_thanh").forEach((o, i) => {
-    (o.recipients || []).forEach((r, k) => push(o.po, o.name, "paper", {
-      name: r.name,
-      email: "—",
-      phone: r.phone
-    }, [10, 25][k % 2], o.faceValue, i + 30, k));
-  });
-  EVENT_SEED.filter(e => e.status === "dang_hoat_dong" || e.status === "da_ket_thuc").forEach((e, i) => {
-    const names = ["Nguyễn Văn An", "Trần Thị Mai", "Lê Hải Đăng", "Phạm Gia Huy"];
-    names.forEach((nm, k) => {
-      const u = nm.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase().replace(/\s/g, ".");
-      push(e.po, e.name, "event", {
-        name: nm,
-        email: `${u}@example.com`,
-        phone: "09" + String(30000000 + i * 311 + k * 47).slice(0, 8)
-      }, 1, e.faceValue || 0, i + 60, k);
-    });
-  });
-  return rows;
+  return Object.values(map).map(u => {
+    const distinctOrders = u.orders.size;
+    const distinctPOs = u.pos.size;
+    const unused = u.total - u.used - u.expired;
+    // Risk: high voucher count per phone across many POs = higher risk
+    const score = u.total * 2 + distinctPOs * 8 + distinctOrders * 4;
+    const risk = score > 40 ? "high" : score > 20 ? "medium" : "low";
+    return {
+      phone: u.phone,
+      name: u.name,
+      total: u.total,
+      used: u.used,
+      unused,
+      expired: u.expired,
+      distinctOrders,
+      distinctPOs,
+      score,
+      risk
+    };
+  }).sort((a, b) => b.score - a.score);
 })();
 Object.assign(window, {
   TYPE_LABEL,
-  CONSOLIDATED_REPORT,
-  ISSUANCE_RECORDS
+  ORDER_REPORT,
+  VOUCHER_REPORT,
+  BEHAVIOR_REPORT
 });
 </script>
   <script>
@@ -11875,473 +11880,251 @@ Object.assign(window, {
 });
 </script>
   <script>
-/* ───────────── AIA VoucherAdmin — Reports ───────────── */
+/* ───────────── AIA VoucherAdmin — Reports (3 new) ───────────── */
 
-const TYPE_BADGE_TONE = {
-  evoucher: "info",
-  paper: "teal",
-  event: "warn"
-};
-function TypeTag({
-  type
-}) {
-  const t = STATUS_TONES[TYPE_BADGE_TONE[type]] || STATUS_TONES.slate;
-  return /*#__PURE__*/React.createElement("span", {
-    className: "pill",
-    style: {
-      background: t.bg,
-      color: t.ink
-    }
-  }, TYPE_LABEL[type]);
-}
-const VOUCHER_STATUS_LABEL = {
-  issue: "Issue",
-  redeem: "Redeem",
-  expired: "Expired"
-};
-const VOUCHER_STATUS_TONE = {
-  issue: "info",
-  redeem: "success",
-  expired: "muted"
-};
-function VoucherStatusTag({
-  status
-}) {
-  const t = STATUS_TONES[VOUCHER_STATUS_TONE[status]] || STATUS_TONES.slate;
-  return /*#__PURE__*/React.createElement("span", {
-    className: "pill",
-    style: {
-      background: t.bg,
-      color: t.ink
-    }
-  }, VOUCHER_STATUS_LABEL[status] || status);
-}
-
-/* ── 1. Consolidated report ── */
-function ConsolidatedReportPage({
-  rows
-}) {
-  const [draft, setDraft] = useState({
-    po: "",
-    name: "",
-    creator: ""
-  });
-  const [applied, setApplied] = useState({
-    po: "",
-    name: "",
-    creator: ""
-  });
-  const [page, setPage] = useState(1);
-  const perPage = 9;
-  const filtered = useMemo(() => rows.filter(r => (!applied.po || r.po === applied.po) && (!applied.name || r.name === applied.name) && (!applied.creator || r.creator.email === applied.creator)), [rows, applied]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / perPage));
-  const cur = Math.min(page, pageCount);
-  const pageRows = filtered.slice((cur - 1) * perPage, cur * perPage);
-  function applySearch() {
-    setApplied({
-      ...draft
-    });
-    setPage(1);
-  }
-  function clearSearch() {
-    setDraft({
-      po: "",
-      name: "",
-      creator: ""
-    });
-    setApplied({
-      po: "",
-      name: "",
-      creator: ""
-    });
-    setPage(1);
-  }
-  const totalVouchers = filtered.reduce((n, r) => n + r.voucherCount, 0);
-  const totalValue = filtered.reduce((n, r) => n + r.totalValue, 0);
-  const totalRedeem = filtered.reduce((n, r) => n + (r.redeemValue || 0), 0);
-  const totalExpired = filtered.reduce((n, r) => n + (r.expiredValue || 0), 0);
-  const totalRemaining = totalValue - totalRedeem - totalExpired;
-  const poOpts = [...new Set(rows.map(r => r.po))].map(p => ({
-    value: p,
-    label: p
-  }));
-  const nameOpts = [...new Set(rows.map(r => r.name))].map(nm => ({
-    value: nm,
-    label: nm
-  }));
-  const creatorMap = {};
-  rows.forEach(r => {
-    creatorMap[r.creator.email] = r.creator;
-  });
-  const creatorOpts = Object.values(creatorMap).map(c => ({
-    value: c.email,
-    label: `${c.name} - ${c.email}`
-  }));
-  return /*#__PURE__*/React.createElement(PageWrap, {
-    full: true
-  }, /*#__PURE__*/React.createElement(PageHeader, {
-    title: "B\xE1o c\xE1o t\u1ED5ng h\u1EE3p",
-    sub: "T\u1ED5ng h\u1EE3p \u0111\u01A1n h\xE0ng \u0111\xE3 ho\xE0n th\xE0nh v\xE0 s\u1EF1 ki\u1EC7n \u0111ang ho\u1EA1t \u0111\u1ED9ng / \u0111\xE3 k\u1EBFt th\xFAc.",
-    actions: /*#__PURE__*/React.createElement(Button, {
-      variant: "ghost",
-      icon: "download",
-      onClick: () => {}
-    }, "Xu\u1EA5t d\u1EEF li\u1EC7u")
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "repeat(3, 1fr)",
-      gap: 16,
-      marginBottom: 24
-    }
-  }, /*#__PURE__*/React.createElement(ReportStat, {
-    icon: "file",
-    label: "T\u1ED5ng s\u1ED1 m\u1EE5c",
-    value: `${filtered.length}`
-  }), /*#__PURE__*/React.createElement(ReportStat, {
-    icon: "ticket",
-    label: "T\u1ED5ng s\u1ED1 voucher",
-    value: totalVouchers.toLocaleString("vi-VN").replace(/,/g, ".")
-  }), /*#__PURE__*/React.createElement(ReportStat, {
-    icon: "chart",
-    label: "T\u1ED5ng ti\u1EC1n issue",
-    value: `${formatVnd(totalValue)} ₫`,
-    highlight: true
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "repeat(3, 1fr)",
-      gap: 16,
-      marginBottom: 24
-    }
-  }, /*#__PURE__*/React.createElement(ReportStat, {
-    icon: "chart",
-    label: "T\u1ED5ng ti\u1EC1n redeem",
-    value: `${formatVnd(totalRedeem)} ₫`,
-    tone: "success"
-  }), /*#__PURE__*/React.createElement(ReportStat, {
-    icon: "chart",
-    label: "T\u1ED5ng ti\u1EC1n h\u1EBFt h\u1EA1n",
-    value: `${formatVnd(totalExpired)} ₫`,
-    tone: "danger"
-  }), /*#__PURE__*/React.createElement(ReportStat, {
-    icon: "chart",
-    label: "T\u1ED5ng ti\u1EC1n c\xF2n l\u1EA1i",
-    value: `${formatVnd(totalRemaining)} ₫`,
-    tone: "warn"
-  })), /*#__PURE__*/React.createElement("div", {
-    className: "card",
-    style: {
-      padding: 24,
-      marginBottom: 24
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "repeat(3, 1fr)",
-      gap: 18,
-      alignItems: "end"
-    }
-  }, /*#__PURE__*/React.createElement(Field, {
-    label: "PO"
-  }, /*#__PURE__*/React.createElement(SearchSelect, {
-    value: draft.po,
-    onChange: v => setDraft({
-      ...draft,
-      po: v
-    }),
-    options: poOpts
-  })), /*#__PURE__*/React.createElement(Field, {
-    label: "\u0110\u01A1n h\xE0ng / S\u1EF1 ki\u1EC7n"
-  }, /*#__PURE__*/React.createElement(SearchSelect, {
-    value: draft.name,
-    onChange: v => setDraft({
-      ...draft,
-      name: v
-    }),
-    options: nameOpts
-  })), /*#__PURE__*/React.createElement(Field, {
-    label: "Ng\u01B0\u1EDDi t\u1EA1o"
-  }, /*#__PURE__*/React.createElement(SearchSelect, {
-    value: draft.creator,
-    onChange: v => setDraft({
-      ...draft,
-      creator: v
-    }),
-    options: creatorOpts
-  }))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "flex-end",
-      gap: 12,
-      marginTop: 20,
-      paddingTop: 18,
-      borderTop: "1px solid var(--border-soft)"
-    }
-  }, /*#__PURE__*/React.createElement(Button, {
-    variant: "ghost",
-    onClick: clearSearch
-  }, "H\u1EE7y t\xECm ki\u1EBFm"), /*#__PURE__*/React.createElement(Button, {
-    icon: "search",
-    onClick: applySearch
-  }, "T\xECm ki\u1EBFm"))), /*#__PURE__*/React.createElement("div", {
-    className: "card",
-    style: {
-      overflow: "hidden"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      overflowX: "auto"
-    }
-  }, /*#__PURE__*/React.createElement("table", {
-    className: "tbl",
-    style: {
-      minWidth: 920
-    }
-  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", null, "PO"), /*#__PURE__*/React.createElement("th", null, "\u0110\u01A0N H\xC0NG / EVENT"), /*#__PURE__*/React.createElement("th", null, "LO\u1EA0I"), /*#__PURE__*/React.createElement("th", {
-    style: {
-      textAlign: "right"
-    }
-  }, "SL VOUCHER"), /*#__PURE__*/React.createElement("th", {
-    style: {
-      textAlign: "right"
-    }
-  }, "T\u1ED4NG TI\u1EC0N ISSUE"), /*#__PURE__*/React.createElement("th", {
-    style: {
-      textAlign: "right"
-    }
-  }, "T\u1ED4NG TI\u1EC0N REDEEM"), /*#__PURE__*/React.createElement("th", {
-    style: {
-      textAlign: "right"
-    }
-  }, "T\u1ED4NG TI\u1EC0N H\u1EBET H\u1EA0N"), /*#__PURE__*/React.createElement("th", {
-    style: {
-      textAlign: "right"
-    }
-  }, "T\u1ED4NG TI\u1EC0N C\xD2N L\u1EA0I"), /*#__PURE__*/React.createElement("th", null, "NG\u01AF\u1EDCI T\u1EA0O"))), /*#__PURE__*/React.createElement("tbody", null, pageRows.length === 0 && /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
-    colSpan: 9
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "48px 0",
-      textAlign: "center",
-      color: "var(--muted)"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 600,
-      color: "var(--ink-body)"
-    }
-  }, "Kh\xF4ng c\xF3 d\u1EEF li\u1EC7u ph\xF9 h\u1EE3p")))), pageRows.map(r => /*#__PURE__*/React.createElement("tr", {
-    key: r.id
-  }, /*#__PURE__*/React.createElement("td", {
-    style: {
-      whiteSpace: "nowrap"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: "var(--ink-body)"
-    }
-  }, r.po)), /*#__PURE__*/React.createElement("td", {
-    style: {
-      whiteSpace: "nowrap"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 600
-    }
-  }, r.name)), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement(TypeTag, {
-    type: r.type
-  })), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "right",
-      fontWeight: 600,
-      fontVariantNumeric: "tabular-nums"
-    }
-  }, r.voucherCount.toLocaleString("vi-VN").replace(/,/g, ".")), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "right",
-      fontWeight: 600,
-      fontVariantNumeric: "tabular-nums",
-      whiteSpace: "nowrap"
-    }
-  }, formatVnd(r.totalValue), " ", /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: "var(--muted)",
-      fontWeight: 500
-    }
-  }, "\u20AB")), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "right",
-      fontWeight: 600,
-      fontVariantNumeric: "tabular-nums",
-      whiteSpace: "nowrap",
-      color: "var(--green-ink, #0e7a3a)"
-    }
-  }, formatVnd(r.redeemValue || 0), " ", /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: "var(--muted)",
-      fontWeight: 500
-    }
-  }, "\u20AB")), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "right",
-      fontWeight: 600,
-      fontVariantNumeric: "tabular-nums",
-      whiteSpace: "nowrap",
-      color: "var(--red-ink, #c53030)"
-    }
-  }, formatVnd(r.expiredValue || 0), " ", /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: "var(--muted)",
-      fontWeight: 500
-    }
-  }, "\u20AB")), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "right",
-      fontWeight: 600,
-      fontVariantNumeric: "tabular-nums",
-      whiteSpace: "nowrap"
-    }
-  }, formatVnd(r.remainingValue || 0), " ", /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: "var(--muted)",
-      fontWeight: 500
-    }
-  }, "\u20AB")), /*#__PURE__*/React.createElement("td", {
-    style: {
-      whiteSpace: "nowrap"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 600
-    }
-  }, r.creator.name), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: "var(--muted)"
-    }
-  }, r.creator.email))))))), /*#__PURE__*/React.createElement(Pagination, {
-    page: cur,
-    pageCount: pageCount,
-    total: filtered.length,
-    perPage: perPage,
-    onPage: setPage
-  })));
-}
-const STAT_TONE_MAP = {
-  success: {
-    bg: "#f0fdf4",
-    iconBg: "#16a34a",
-    ink: "#15803d"
-  },
-  danger: {
-    bg: "#fef2f2",
-    iconBg: "#dc2626",
-    ink: "#b91c1c"
-  },
-  warn: {
-    bg: "#fffbeb",
-    iconBg: "#d97706",
-    ink: "#b45309"
-  }
-};
 function ReportStat({
   icon,
   label,
   value,
-  highlight,
   tone
 }) {
-  const t = tone ? STAT_TONE_MAP[tone] : null;
-  const cardBg = highlight ? "var(--brand-tint)" : t ? t.bg : "var(--surface)";
-  const iconBg = highlight ? "var(--brand)" : t ? t.iconBg : "var(--bg)";
-  const iconColor = highlight ? "#fff" : t ? "#fff" : "var(--brand)";
-  const valueColor = highlight ? "var(--brand)" : t ? t.ink : "var(--ink)";
-  const iconBorder = highlight || t ? "none" : "1px solid var(--border)";
+  const T = {
+    success: {
+      bg: "#f0fdf4",
+      ib: "#16a34a",
+      ink: "#15803d"
+    },
+    danger: {
+      bg: "#fef2f2",
+      ib: "#dc2626",
+      ink: "#b91c1c"
+    },
+    warn: {
+      bg: "#fffbeb",
+      ib: "#d97706",
+      ink: "#b45309"
+    },
+    info: {
+      bg: "var(--brand-tint)",
+      ib: "var(--brand)",
+      ink: "var(--brand)"
+    }
+  };
+  const t = T[tone] || {
+    bg: "var(--surface)",
+    ib: "var(--bg)",
+    ink: "var(--ink)"
+  };
   return /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
-      padding: "18px 22px",
+      padding: "16px 20px",
       display: "flex",
       alignItems: "center",
-      gap: 16,
-      background: cardBg
+      gap: 14,
+      background: t.bg
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      width: 46,
-      height: 46,
+      width: 42,
+      height: 42,
       borderRadius: "var(--r)",
       flex: "none",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      background: iconBg,
-      color: iconColor,
-      border: iconBorder
+      background: t.ib,
+      color: "#fff"
     }
-  }, icon === "ticket" ? /*#__PURE__*/React.createElement(Ic.ticket, {
-    s: 22
-  }) : /*#__PURE__*/React.createElement(Icon, {
+  }, /*#__PURE__*/React.createElement(Icon, {
     name: icon,
-    size: 22,
-    stroke: 1.9
+    size: 20,
+    stroke: 2
   })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 12.5,
-      fontWeight: 600,
+      fontSize: 12,
+      fontWeight: 700,
       color: "var(--ink-body)"
     }
   }, label), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 22,
+      fontSize: 20,
       fontWeight: 800,
-      color: valueColor,
-      marginTop: 2,
+      color: t.ink,
+      marginTop: 1,
       fontVariantNumeric: "tabular-nums"
     }
   }, value)));
 }
+const RISK_META = {
+  high: {
+    label: "Rủi ro cao",
+    bg: "#fef2f2",
+    ink: "#b91c1c",
+    dot: "#dc2626"
+  },
+  medium: {
+    label: "Trung bình",
+    bg: "#fffbeb",
+    ink: "#b45309",
+    dot: "#d97706"
+  },
+  low: {
+    label: "Thấp",
+    bg: "#f0fdf4",
+    ink: "#15803d",
+    dot: "#16a34a"
+  }
+};
+function RiskBadge({
+  risk
+}) {
+  const m = RISK_META[risk] || RISK_META.low;
+  return /*#__PURE__*/React.createElement("span", {
+    className: "pill",
+    style: {
+      background: m.bg,
+      color: m.ink,
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 5
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 7,
+      height: 7,
+      borderRadius: "50%",
+      background: m.dot,
+      display: "inline-block"
+    }
+  }), m.label);
+}
+const FlagBadge = () => /*#__PURE__*/React.createElement("span", {
+  className: "pill",
+  style: {
+    background: "#fffbeb",
+    color: "#b45309",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    whiteSpace: "nowrap"
+  }
+}, /*#__PURE__*/React.createElement(Icon, {
+  name: "alert",
+  size: 12,
+  stroke: 2.5
+}), "\u26A0 T\u1EF7 l\u1EC7 ch\u01B0a d\xF9ng cao");
+function SortTh({
+  label,
+  col,
+  sortCol,
+  sortDir,
+  onSort
+}) {
+  const active = sortCol === col;
+  return /*#__PURE__*/React.createElement("th", null, /*#__PURE__*/React.createElement("button", {
+    onClick: () => onSort(col),
+    style: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 5,
+      font: "inherit",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: ".04em",
+      color: "var(--ink-body)",
+      textTransform: "uppercase"
+    }
+  }, label, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "inline-flex",
+      flexDirection: "column",
+      lineHeight: 0.6
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    name: "chevUp",
+    size: 10,
+    stroke: 3,
+    style: {
+      opacity: active && sortDir === "asc" ? 1 : 0.25,
+      color: active && sortDir === "asc" ? "var(--brand)" : "currentColor"
+    }
+  }), /*#__PURE__*/React.createElement(Icon, {
+    name: "chevDown",
+    size: 10,
+    stroke: 3,
+    style: {
+      opacity: active && sortDir === "desc" ? 1 : 0.25,
+      color: active && sortDir === "desc" ? "var(--brand)" : "currentColor"
+    }
+  }))));
+}
 
-/* ── 2. Issuance report ── */
-function IssuanceReportPage({
+/* ══════════════════════════════════════════════════════════════════
+   Report 1 — Báo cáo đơn hàng
+   1 row = 1 đơn hàng; trạng thái + flag rule
+   Flag: ≥20% voucher đã phát hành còn chưa dùng sau 2 tháng
+   ══════════════════════════════════════════════════════════════════ */
+function OrderReportPage({
   rows
 }) {
   const [draft, setDraft] = useState({
     po: "",
-    name: "",
+    status: "",
+    flagOnly: false,
     from: "",
     to: ""
   });
   const [applied, setApplied] = useState({
     po: "",
-    name: "",
+    status: "",
+    flagOnly: false,
     from: "",
     to: ""
   });
   const [page, setPage] = useState(1);
+  const [sortCol, setSortCol] = useState("created");
   const [sortDir, setSortDir] = useState("desc");
   const perPage = 10;
   const toTs = s => {
+    if (!s) return 0;
     const [d, t] = s.split(" ");
     const [dd, mm, yy] = d.split("/");
     return new Date(`${yy}-${mm}-${dd}T${t || "00:00:00"}`).getTime();
   };
-  const inRange = time => {
-    if (!applied.from && !applied.to) return true;
-    const ts = toTs(time);
-    if (applied.from && ts < new Date(applied.from + "T00:00:00").getTime()) return false;
-    if (applied.to && ts > new Date(applied.to + "T23:59:59").getTime()) return false;
-    return true;
-  };
   const filtered = useMemo(() => {
-    let r = rows.filter(x => (!applied.po || x.po === applied.po) && (!applied.name || x.name === applied.name) && inRange(x.time));
-    r = [...r].sort((a, b) => sortDir === "asc" ? toTs(a.time) - toTs(b.time) : toTs(b.time) - toTs(a.time));
+    let r = rows.filter(o => (!applied.po || o.po === applied.po) && (!applied.status || o.status === applied.status) && (!applied.flagOnly || o.flagged) && (!applied.from || toTs(o.created) >= new Date(applied.from + "T00:00:00").getTime()) && (!applied.to || toTs(o.created) <= new Date(applied.to + "T23:59:59").getTime()));
+    r = [...r].sort((a, b) => {
+      let av = a[sortCol],
+        bv = b[sortCol];
+      if (sortCol === "created") {
+        av = toTs(a.created);
+        bv = toTs(b.created);
+      }
+      if (typeof av === "number") return sortDir === "asc" ? av - bv : bv - av;
+      return sortDir === "asc" ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+    });
     return r;
-  }, [rows, applied, sortDir]);
+  }, [rows, applied, sortCol, sortDir]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / perPage));
   const cur = Math.min(page, pageCount);
   const pageRows = filtered.slice((cur - 1) * perPage, cur * perPage);
+  const flaggedCount = filtered.filter(r => r.flagged).length;
+  const totalIssued = filtered.reduce((n, r) => n + (r.issuedDone || 0), 0);
+  const totalUsed = filtered.reduce((n, r) => n + (r.usedCount || 0), 0);
+  const avgUsage = totalIssued > 0 ? Math.round(totalUsed / totalIssued * 100) : 0;
+  const poOpts = [...new Set(rows.map(r => r.po))].map(p => ({
+    value: p,
+    label: p
+  }));
+  const statusOpts = Object.entries(ORDER_STATUS).map(([k, v]) => ({
+    value: k,
+    label: v.label
+  }));
+  function onSort(col) {
+    setSortDir(sortCol === col && sortDir === "desc" ? "asc" : "desc");
+    setSortCol(col);
+  }
   function applySearch() {
     setApplied({
       ...draft
@@ -12349,49 +12132,86 @@ function IssuanceReportPage({
     setPage(1);
   }
   function clearSearch() {
-    setDraft({
+    const e = {
       po: "",
-      name: "",
+      status: "",
+      flagOnly: false,
       from: "",
       to: ""
-    });
-    setApplied({
-      po: "",
-      name: "",
-      from: "",
-      to: ""
-    });
+    };
+    setDraft(e);
+    setApplied(e);
     setPage(1);
   }
-  const poOpts = [...new Set(rows.map(r => r.po))].map(p => ({
-    value: p,
-    label: p
-  }));
-  const nameOpts = [...new Set(rows.map(r => r.name))].map(nm => ({
-    value: nm,
-    label: nm
-  }));
   return /*#__PURE__*/React.createElement(PageWrap, {
     full: true
   }, /*#__PURE__*/React.createElement(PageHeader, {
-    title: "B\xE1o c\xE1o ph\xE1t h\xE0nh voucher",
-    sub: "Chi ti\u1EBFt t\u1EEBng voucher \u0111\xE3 ph\xE1t h\xE0nh t\u1EDBi ng\u01B0\u1EDDi nh\u1EADn.",
+    title: "B\xE1o c\xE1o \u0111\u01A1n h\xE0ng",
+    sub: "M\u1ED7i d\xF2ng l\xE0 1 \u0111\u01A1n h\xE0ng \u2014 tr\u1EA1ng th\xE1i x\u1EED l\xFD v\xE0 flag c\u1EA3nh b\xE1o t\u1EF7 l\u1EC7 ch\u01B0a s\u1EED d\u1EE5ng.",
     actions: /*#__PURE__*/React.createElement(Button, {
       variant: "ghost",
       icon: "download",
       onClick: () => {}
     }, "Xu\u1EA5t d\u1EEF li\u1EC7u")
   }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(4, 1fr)",
+      gap: 14,
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement(ReportStat, {
+    icon: "clipboard",
+    label: "T\u1ED5ng \u0111\u01A1n h\xE0ng",
+    value: filtered.length,
+    tone: "info"
+  }), /*#__PURE__*/React.createElement(ReportStat, {
+    icon: "alert",
+    label: "\u0110\u01A1n b\u1ECB flag",
+    value: flaggedCount,
+    tone: flaggedCount > 0 ? "warn" : "success"
+  }), /*#__PURE__*/React.createElement(ReportStat, {
+    icon: "ticket",
+    label: "T\u1ED5ng \u0111\xE3 ph\xE1t h\xE0nh",
+    value: totalIssued.toLocaleString("vi-VN"),
+    tone: "info"
+  }), /*#__PURE__*/React.createElement(ReportStat, {
+    icon: "chart",
+    label: "T\u1EF7 l\u1EC7 s\u1EED d\u1EE5ng TB",
+    value: `${avgUsage}%`,
+    tone: avgUsage >= 70 ? "success" : avgUsage >= 40 ? "warn" : "danger"
+  })), /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
-      padding: 24,
-      marginBottom: 24
+      padding: "12px 20px",
+      marginBottom: 14,
+      background: "var(--warn-bg)",
+      border: "1px solid #FDE68A",
+      display: "flex",
+      gap: 10,
+      alignItems: "flex-start",
+      fontSize: 13,
+      color: "var(--warn-ink)"
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    name: "info",
+    size: 16,
+    stroke: 2,
+    style: {
+      flex: "none",
+      marginTop: 1
+    }
+  }), /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("b", null, "Flag rule:"), " \u0110\u01A1n h\xE0ng b\u1ECB g\u1EAFn c\u1EDD khi t\u1EF7 l\u1EC7 voucher ch\u01B0a s\u1EED d\u1EE5ng \u2265 20% tr\xEAn t\u1ED5ng voucher \u0111\xE3 ph\xE1t h\xE0nh, sau \xEDt nh\u1EA5t 2 th\xE1ng k\u1EC3 t\u1EEB ng\xE0y t\u1EA1o.")), /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      padding: 20,
+      marginBottom: 20
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
-      gridTemplateColumns: "1fr 1fr 1.3fr",
-      gap: 18,
+      gridTemplateColumns: "1fr 1fr 1.4fr 1fr auto",
+      gap: 16,
       alignItems: "end"
     }
   }, /*#__PURE__*/React.createElement(Field, {
@@ -12404,16 +12224,19 @@ function IssuanceReportPage({
     }),
     options: poOpts
   })), /*#__PURE__*/React.createElement(Field, {
-    label: "\u0110\u01A1n h\xE0ng / S\u1EF1 ki\u1EC7n"
-  }, /*#__PURE__*/React.createElement(SearchSelect, {
-    value: draft.name,
-    onChange: v => setDraft({
+    label: "Tr\u1EA1ng th\xE1i"
+  }, /*#__PURE__*/React.createElement(Select, {
+    value: draft.status,
+    onChange: e => setDraft({
       ...draft,
-      name: v
+      status: e.target.value
     }),
-    options: nameOpts
+    options: [{
+      value: "",
+      label: "Tất cả"
+    }, ...statusOpts]
   })), /*#__PURE__*/React.createElement(Field, {
-    label: "Th\u1EDDi gian ph\xE1t h\xE0nh"
+    label: "Ng\xE0y t\u1EA1o"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -12437,22 +12260,47 @@ function IssuanceReportPage({
       ...draft,
       to: v
     })
-  })))), /*#__PURE__*/React.createElement("div", {
+  }))), /*#__PURE__*/React.createElement(Field, {
+    label: " ",
+    style: {
+      paddingTop: 0
+    }
+  }, /*#__PURE__*/React.createElement("label", {
     style: {
       display: "flex",
-      justifyContent: "flex-end",
-      gap: 12,
-      marginTop: 20,
-      paddingTop: 18,
-      borderTop: "1px solid var(--border-soft)"
+      alignItems: "center",
+      gap: 9,
+      height: 44,
+      cursor: "pointer",
+      fontSize: 13,
+      fontWeight: 600,
+      color: draft.flagOnly ? "var(--brand)" : "var(--ink-body)"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: draft.flagOnly,
+    onChange: e => setDraft({
+      ...draft,
+      flagOnly: e.target.checked
+    }),
+    style: {
+      width: 16,
+      height: 16,
+      accentColor: "var(--brand)",
+      cursor: "pointer"
+    }
+  }), "Ch\u1EC9 xem \u0111\u01A1n b\u1ECB flag")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
     }
   }, /*#__PURE__*/React.createElement(Button, {
     variant: "ghost",
     onClick: clearSearch
-  }, "H\u1EE7y t\xECm ki\u1EBFm"), /*#__PURE__*/React.createElement(Button, {
+  }, "X\xF3a"), /*#__PURE__*/React.createElement(Button, {
     icon: "search",
     onClick: applySearch
-  }, "T\xECm ki\u1EBFm"))), /*#__PURE__*/React.createElement("div", {
+  }, "T\xECm")))), /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       overflow: "hidden"
@@ -12464,52 +12312,45 @@ function IssuanceReportPage({
   }, /*#__PURE__*/React.createElement("table", {
     className: "tbl",
     style: {
-      minWidth: 1280
+      minWidth: 1100
     }
-  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", null, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setSortDir(d => d === "asc" ? "desc" : "asc"),
-    style: {
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 6,
-      font: "inherit",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: ".04em",
-      color: "var(--ink-body)",
-      textTransform: "uppercase"
-    }
-  }, "TH\u1EDCI GIAN PH\xC1T H\xC0NH", /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "inline-flex",
-      flexDirection: "column",
-      lineHeight: 0.6
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
-    name: "chevUp",
-    size: 11,
-    stroke: 3,
-    style: {
-      opacity: sortDir === "asc" ? 1 : 0.3,
-      color: sortDir === "asc" ? "var(--brand)" : "currentColor"
-    }
-  }), /*#__PURE__*/React.createElement(Icon, {
-    name: "chevDown",
-    size: 11,
-    stroke: 3,
-    style: {
-      opacity: sortDir === "desc" ? 1 : 0.3,
-      color: sortDir === "desc" ? "var(--brand)" : "currentColor"
-    }
-  })))), /*#__PURE__*/React.createElement("th", null, "PO"), /*#__PURE__*/React.createElement("th", null, "\u0110\u01A0N H\xC0NG / EVENT"), /*#__PURE__*/React.createElement("th", null, "LO\u1EA0I"), /*#__PURE__*/React.createElement("th", null, "NG\u01AF\u1EDCI NH\u1EACN"), /*#__PURE__*/React.createElement("th", null, "EMAIL"), /*#__PURE__*/React.createElement("th", null, "S\u0110T"), /*#__PURE__*/React.createElement("th", {
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement(SortTh, {
+    label: "M\xE3 \u0111\u01A1n",
+    col: "code",
+    sortCol: sortCol,
+    sortDir: sortDir,
+    onSort: onSort
+  }), /*#__PURE__*/React.createElement("th", null, "T\xCAN \u0110\u01A0N H\xC0NG"), /*#__PURE__*/React.createElement("th", null, "PO"), /*#__PURE__*/React.createElement(SortTh, {
+    label: "Ng\xE0y t\u1EA1o",
+    col: "created",
+    sortCol: sortCol,
+    sortDir: sortDir,
+    onSort: onSort
+  }), /*#__PURE__*/React.createElement("th", null, "TR\u1EA0NG TH\xC1I"), /*#__PURE__*/React.createElement("th", {
     style: {
       textAlign: "right"
     }
-  }, "SL"), /*#__PURE__*/React.createElement("th", {
+  }, "\u0110\xC3 T\u1EA0O"), /*#__PURE__*/React.createElement("th", {
     style: {
       textAlign: "right"
     }
-  }, "M\u1EC6NH GI\xC1"), /*#__PURE__*/React.createElement("th", null, "TR\u1EA0NG TH\xC1I"), /*#__PURE__*/React.createElement("th", null, "TRANSACTION-REF-ID"))), /*#__PURE__*/React.createElement("tbody", null, pageRows.length === 0 && /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+  }, "\u0110\xC3 PH"), /*#__PURE__*/React.createElement(SortTh, {
+    label: "\u0110\xE3 d\xF9ng",
+    col: "usedCount",
+    sortCol: sortCol,
+    sortDir: sortDir,
+    onSort: onSort
+  }), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: "right"
+    }
+  }, "CH\u01AFA D\xD9NG"), /*#__PURE__*/React.createElement(SortTh, {
+    label: "T\u1EF7 l\u1EC7 ch\u01B0a d\xF9ng",
+    col: "unusedRatio",
+    sortCol: sortCol,
+    sortDir: sortDir,
+    onSort: onSort
+  }), /*#__PURE__*/React.createElement("th", null, "FLAG"))), /*#__PURE__*/React.createElement("tbody", null, pageRows.length === 0 && /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
     colSpan: 11
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -12522,86 +12363,740 @@ function IssuanceReportPage({
       fontWeight: 600,
       color: "var(--ink-body)"
     }
-  }, "Kh\xF4ng c\xF3 d\u1EEF li\u1EC7u ph\xF9 h\u1EE3p")))), pageRows.map(r => /*#__PURE__*/React.createElement("tr", {
-    key: r.id
-  }, /*#__PURE__*/React.createElement("td", {
+  }, "Kh\xF4ng c\xF3 d\u1EEF li\u1EC7u ph\xF9 h\u1EE3p")))), pageRows.map(o => {
+    const pct = o.unusedRatio * 100;
+    const pctColor = pct >= 40 ? "#b91c1c" : pct >= 20 ? "#b45309" : "#15803d";
+    return /*#__PURE__*/React.createElement("tr", {
+      key: o.id,
+      style: o.flagged ? {
+        background: "#fffdf5"
+      } : undefined
+    }, /*#__PURE__*/React.createElement("td", {
+      style: {
+        whiteSpace: "nowrap"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "monospace",
+        fontSize: 13,
+        color: "var(--slate)"
+      }
+    }, o.code)), /*#__PURE__*/React.createElement("td", {
+      style: {
+        whiteSpace: "nowrap",
+        fontWeight: 600,
+        maxWidth: 200,
+        overflow: "hidden",
+        textOverflow: "ellipsis"
+      }
+    }, o.name), /*#__PURE__*/React.createElement("td", {
+      style: {
+        whiteSpace: "nowrap",
+        color: "var(--ink-body)",
+        fontSize: 13
+      }
+    }, o.po), /*#__PURE__*/React.createElement("td", {
+      style: {
+        whiteSpace: "nowrap"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontVariantNumeric: "tabular-nums"
+      }
+    }, o.created.split(" ")[0]), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: "var(--muted)"
+      }
+    }, o.created.split(" ")[1])), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement(StatusBadge, {
+      status: o.status
+    })), /*#__PURE__*/React.createElement("td", {
+      style: {
+        textAlign: "right",
+        fontVariantNumeric: "tabular-nums"
+      }
+    }, o.madeDone, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "var(--muted)"
+      }
+    }, "/", o.madeTotal)), /*#__PURE__*/React.createElement("td", {
+      style: {
+        textAlign: "right",
+        fontVariantNumeric: "tabular-nums"
+      }
+    }, o.issuedDone, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "var(--muted)"
+      }
+    }, "/", o.issuedTotal)), /*#__PURE__*/React.createElement("td", {
+      style: {
+        textAlign: "right",
+        fontVariantNumeric: "tabular-nums",
+        fontWeight: 600
+      }
+    }, o.usedCount), /*#__PURE__*/React.createElement("td", {
+      style: {
+        textAlign: "right",
+        fontVariantNumeric: "tabular-nums",
+        fontWeight: 600
+      }
+    }, o.unusedCount), /*#__PURE__*/React.createElement("td", {
+      style: {
+        textAlign: "right",
+        fontVariantNumeric: "tabular-nums",
+        fontWeight: 700,
+        color: pctColor
+      }
+    }, o.issuedDone > 0 ? pct.toFixed(1) + "%" : "—"), /*#__PURE__*/React.createElement("td", null, o.flagged ? /*#__PURE__*/React.createElement(FlagBadge, null) : /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "var(--muted)",
+        fontSize: 12
+      }
+    }, "\u2014")));
+  })))), /*#__PURE__*/React.createElement(Pagination, {
+    page: cur,
+    pageCount: pageCount,
+    total: filtered.length,
+    perPage: perPage,
+    onPage: setPage
+  })));
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Report 2 — Báo cáo quản lý vouchers
+   1 row = 1 voucher ID
+   ══════════════════════════════════════════════════════════════════ */
+const VSTATUS_META = {
+  issued: {
+    label: "Đã phát hành",
+    bg: "#EFF6FF",
+    ink: "#1D4ED8"
+  },
+  used: {
+    label: "Đã sử dụng",
+    bg: "#F0FDF4",
+    ink: "#15803D"
+  },
+  expired: {
+    label: "Hết hạn",
+    bg: "#F1F5F9",
+    ink: "#475569"
+  }
+};
+function VStatusBadge({
+  status
+}) {
+  const m = VSTATUS_META[status] || VSTATUS_META.issued;
+  return /*#__PURE__*/React.createElement("span", {
+    className: "pill",
     style: {
-      whiteSpace: "nowrap"
+      background: m.bg,
+      color: m.ink
+    }
+  }, m.label);
+}
+function VoucherReportPage({
+  rows
+}) {
+  const [draft, setDraft] = useState({
+    po: "",
+    orderName: "",
+    status: "",
+    phone: ""
+  });
+  const [applied, setApplied] = useState({
+    po: "",
+    orderName: "",
+    status: "",
+    phone: ""
+  });
+  const [page, setPage] = useState(1);
+  const [sortCol, setSortCol] = useState("id");
+  const [sortDir, setSortDir] = useState("asc");
+  const perPage = 12;
+  const filtered = useMemo(() => {
+    let r = rows.filter(v => (!applied.po || v.po === applied.po) && (!applied.orderName || v.orderName === applied.orderName) && (!applied.status || v.status === applied.status) && (!applied.phone || v.recipientPhone.includes(applied.phone)));
+    r = [...r].sort((a, b) => {
+      const av = a[sortCol],
+        bv = b[sortCol];
+      if (typeof av === "number") return sortDir === "asc" ? av - bv : bv - av;
+      return sortDir === "asc" ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+    });
+    return r;
+  }, [rows, applied, sortCol, sortDir]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / perPage));
+  const cur = Math.min(page, pageCount);
+  const pageRows = filtered.slice((cur - 1) * perPage, cur * perPage);
+  const usedCount = filtered.filter(v => v.status === "used").length;
+  const expiredCount = filtered.filter(v => v.status === "expired").length;
+  const poOpts = [...new Set(rows.map(r => r.po))].map(p => ({
+    value: p,
+    label: p
+  }));
+  const nameOpts = [...new Set(rows.map(r => r.orderName))].map(n => ({
+    value: n,
+    label: n
+  }));
+  const statusOpts = Object.entries(VSTATUS_META).map(([k, v]) => ({
+    value: k,
+    label: v.label
+  }));
+  function onSort(col) {
+    setSortDir(sortCol === col && sortDir === "desc" ? "asc" : "desc");
+    setSortCol(col);
+  }
+  function applySearch() {
+    setApplied({
+      ...draft
+    });
+    setPage(1);
+  }
+  function clearSearch() {
+    const e = {
+      po: "",
+      orderName: "",
+      status: "",
+      phone: ""
+    };
+    setDraft(e);
+    setApplied(e);
+    setPage(1);
+  }
+  return /*#__PURE__*/React.createElement(PageWrap, {
+    full: true
+  }, /*#__PURE__*/React.createElement(PageHeader, {
+    title: "B\xE1o c\xE1o qu\u1EA3n l\xFD vouchers",
+    sub: "M\u1ED7i d\xF2ng l\xE0 1 voucher ID \u2014 tr\u1EA1ng th\xE1i s\u1EED d\u1EE5ng chi ti\u1EBFt.",
+    actions: /*#__PURE__*/React.createElement(Button, {
+      variant: "ghost",
+      icon: "download",
+      onClick: () => {}
+    }, "Xu\u1EA5t d\u1EEF li\u1EC7u")
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(4, 1fr)",
+      gap: 14,
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement(ReportStat, {
+    icon: "ticket",
+    label: "T\u1ED5ng voucher",
+    value: filtered.length,
+    tone: "info"
+  }), /*#__PURE__*/React.createElement(ReportStat, {
+    icon: "check",
+    label: "\u0110\xE3 s\u1EED d\u1EE5ng",
+    value: usedCount,
+    tone: "success"
+  }), /*#__PURE__*/React.createElement(ReportStat, {
+    icon: "clock",
+    label: "Ch\u01B0a s\u1EED d\u1EE5ng",
+    value: filtered.length - usedCount - expiredCount,
+    tone: "warn"
+  }), /*#__PURE__*/React.createElement(ReportStat, {
+    icon: "x",
+    label: "H\u1EBFt h\u1EA1n",
+    value: expiredCount,
+    tone: "danger"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      padding: 20,
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr 1fr 1fr auto",
+      gap: 16,
+      alignItems: "end"
+    }
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "PO"
+  }, /*#__PURE__*/React.createElement(SearchSelect, {
+    value: draft.po,
+    onChange: v => setDraft({
+      ...draft,
+      po: v
+    }),
+    options: poOpts
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "T\xEAn \u0111\u01A1n h\xE0ng"
+  }, /*#__PURE__*/React.createElement(SearchSelect, {
+    value: draft.orderName,
+    onChange: v => setDraft({
+      ...draft,
+      orderName: v
+    }),
+    options: nameOpts
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Tr\u1EA1ng th\xE1i"
+  }, /*#__PURE__*/React.createElement(Select, {
+    value: draft.status,
+    onChange: e => setDraft({
+      ...draft,
+      status: e.target.value
+    }),
+    options: [{
+      value: "",
+      label: "Tất cả"
+    }, ...statusOpts]
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "S\u1ED1 \u0111i\u1EC7n tho\u1EA1i"
+  }, /*#__PURE__*/React.createElement(TextInput, {
+    value: draft.phone,
+    onChange: e => setDraft({
+      ...draft,
+      phone: e.target.value
+    }),
+    placeholder: "09xx..."
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Button, {
+    variant: "ghost",
+    onClick: clearSearch
+  }, "X\xF3a"), /*#__PURE__*/React.createElement(Button, {
+    icon: "search",
+    onClick: applySearch
+  }, "T\xECm")))), /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      overflowX: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("table", {
+    className: "tbl",
+    style: {
+      minWidth: 1050
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement(SortTh, {
+    label: "Voucher ID",
+    col: "id",
+    sortCol: sortCol,
+    sortDir: sortDir,
+    onSort: onSort
+  }), /*#__PURE__*/React.createElement("th", null, "M\xC3 \u0110\u01A0N H\xC0NG"), /*#__PURE__*/React.createElement("th", null, "T\xCAN \u0110\u01A0N H\xC0NG"), /*#__PURE__*/React.createElement("th", null, "PO"), /*#__PURE__*/React.createElement("th", null, "NG\u01AF\u1EDCI NH\u1EACN"), /*#__PURE__*/React.createElement("th", null, "S\u0110T"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: "right"
+    }
+  }, "M\u1EC6NH GI\xC1"), /*#__PURE__*/React.createElement(SortTh, {
+    label: "Ng\xE0y PH",
+    col: "issueDate",
+    sortCol: sortCol,
+    sortDir: sortDir,
+    onSort: onSort
+  }), /*#__PURE__*/React.createElement(SortTh, {
+    label: "H\u1EBFt h\u1EA1n",
+    col: "expiryDate",
+    sortCol: sortCol,
+    sortDir: sortDir,
+    onSort: onSort
+  }), /*#__PURE__*/React.createElement("th", null, "TR\u1EA0NG TH\xC1I"))), /*#__PURE__*/React.createElement("tbody", null, pageRows.length === 0 && /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+    colSpan: 10
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "40px 0",
+      textAlign: "center",
+      color: "var(--muted)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontWeight: 600,
-      fontVariantNumeric: "tabular-nums"
+      color: "var(--ink-body)"
     }
-  }, r.time.split(" ")[0]), /*#__PURE__*/React.createElement("div", {
+  }, "Kh\xF4ng c\xF3 d\u1EEF li\u1EC7u ph\xF9 h\u1EE3p")))), pageRows.map(v => /*#__PURE__*/React.createElement("tr", {
+    key: v.id
+  }, /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement("span", {
     style: {
-      fontSize: 12,
-      color: "var(--muted)",
-      fontVariantNumeric: "tabular-nums"
+      fontFamily: "monospace",
+      fontSize: 12.5,
+      color: "var(--brand)",
+      fontWeight: 600
     }
-  }, r.time.split(" ")[1])), /*#__PURE__*/React.createElement("td", {
+  }, v.id)), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement("span", {
     style: {
+      fontFamily: "monospace",
+      fontSize: 12.5,
+      color: "var(--slate)"
+    }
+  }, v.orderId)), /*#__PURE__*/React.createElement("td", {
+    style: {
+      whiteSpace: "nowrap",
+      fontWeight: 600,
+      maxWidth: 180,
+      overflow: "hidden",
+      textOverflow: "ellipsis"
+    }
+  }, v.orderName), /*#__PURE__*/React.createElement("td", {
+    style: {
+      color: "var(--ink-body)",
+      fontSize: 13,
       whiteSpace: "nowrap"
     }
-  }, /*#__PURE__*/React.createElement("span", {
+  }, v.po), /*#__PURE__*/React.createElement("td", {
     style: {
-      color: "var(--ink-body)"
-    }
-  }, r.po)), /*#__PURE__*/React.createElement("td", {
-    style: {
+      fontWeight: 600,
       whiteSpace: "nowrap"
     }
-  }, /*#__PURE__*/React.createElement("span", {
+  }, v.recipientName), /*#__PURE__*/React.createElement("td", {
     style: {
-      fontWeight: 600
+      color: "var(--ink-body)",
+      fontVariantNumeric: "tabular-nums",
+      fontSize: 13
     }
-  }, r.name)), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement(TypeTag, {
-    type: r.type
-  })), /*#__PURE__*/React.createElement("td", {
-    style: {
-      whiteSpace: "nowrap",
-      fontWeight: 600
-    }
-  }, r.rName), /*#__PURE__*/React.createElement("td", {
-    style: {
-      whiteSpace: "nowrap",
-      color: "var(--ink-body)"
-    }
-  }, r.rEmail), /*#__PURE__*/React.createElement("td", {
-    style: {
-      whiteSpace: "nowrap",
-      color: "var(--ink-body)"
-    }
-  }, r.rPhone), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "right",
-      fontWeight: 600
-    }
-  }, r.qty), /*#__PURE__*/React.createElement("td", {
+  }, v.recipientPhone), /*#__PURE__*/React.createElement("td", {
     style: {
       textAlign: "right",
       fontWeight: 600,
       fontVariantNumeric: "tabular-nums",
       whiteSpace: "nowrap"
     }
-  }, formatVnd(r.faceValue), " ", /*#__PURE__*/React.createElement("span", {
+  }, formatVnd(v.faceValue), " ", /*#__PURE__*/React.createElement("span", {
     style: {
       color: "var(--muted)",
       fontWeight: 500
     }
-  }, "\u20AB")), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement(VoucherStatusTag, {
-    status: r.voucherStatus
-  })), /*#__PURE__*/React.createElement("td", {
+  }, "\u20AB")), /*#__PURE__*/React.createElement("td", {
     style: {
-      whiteSpace: "nowrap"
+      whiteSpace: "nowrap",
+      fontVariantNumeric: "tabular-nums"
     }
-  }, /*#__PURE__*/React.createElement("span", {
+  }, v.issueDate), /*#__PURE__*/React.createElement("td", {
+    style: {
+      whiteSpace: "nowrap",
+      fontVariantNumeric: "tabular-nums",
+      color: "var(--ink-body)"
+    }
+  }, v.expiryDate), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement(VStatusBadge, {
+    status: v.status
+  }))))))), /*#__PURE__*/React.createElement(Pagination, {
+    page: cur,
+    pageCount: pageCount,
+    total: filtered.length,
+    perPage: perPage,
+    onPage: setPage
+  })));
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Report 3 — Báo cáo theo dõi hành vi
+   1 row = 1 end-user (phone)
+   Risk score tính theo tổng voucher / 1 SĐT trên tất cả PO
+   ══════════════════════════════════════════════════════════════════ */
+function BehaviorReportPage({
+  rows
+}) {
+  const [draft, setDraft] = useState({
+    phone: "",
+    risk: ""
+  });
+  const [applied, setApplied] = useState({
+    phone: "",
+    risk: ""
+  });
+  const [page, setPage] = useState(1);
+  const [sortCol, setSortCol] = useState("score");
+  const [sortDir, setSortDir] = useState("desc");
+  const perPage = 12;
+  const filtered = useMemo(() => {
+    let r = rows.filter(u => (!applied.phone || u.phone.includes(applied.phone)) && (!applied.risk || u.risk === applied.risk));
+    r = [...r].sort((a, b) => {
+      const av = a[sortCol],
+        bv = b[sortCol];
+      if (typeof av === "number") return sortDir === "asc" ? av - bv : bv - av;
+      return sortDir === "asc" ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+    });
+    return r;
+  }, [rows, applied, sortCol, sortDir]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / perPage));
+  const cur = Math.min(page, pageCount);
+  const pageRows = filtered.slice((cur - 1) * perPage, cur * perPage);
+  const highRisk = filtered.filter(u => u.risk === "high").length;
+  const medRisk = filtered.filter(u => u.risk === "medium").length;
+  function onSort(col) {
+    setSortDir(sortCol === col && sortDir === "desc" ? "asc" : "desc");
+    setSortCol(col);
+  }
+  function applySearch() {
+    setApplied({
+      ...draft
+    });
+    setPage(1);
+  }
+  function clearSearch() {
+    setDraft({
+      phone: "",
+      risk: ""
+    });
+    setApplied({
+      phone: "",
+      risk: ""
+    });
+    setPage(1);
+  }
+  return /*#__PURE__*/React.createElement(PageWrap, {
+    full: true
+  }, /*#__PURE__*/React.createElement(PageHeader, {
+    title: "B\xE1o c\xE1o theo d\xF5i h\xE0nh vi",
+    sub: "M\u1ED7i d\xF2ng l\xE0 1 end-user (S\u0110T) \u2014 t\u1ED5ng h\u1EE3p voucher nh\u1EADn / d\xF9ng v\xE0 m\u1EE9c \u0111\u1ED9 r\u1EE7i ro.",
+    actions: /*#__PURE__*/React.createElement(Button, {
+      variant: "ghost",
+      icon: "download",
+      onClick: () => {}
+    }, "Xu\u1EA5t d\u1EEF li\u1EC7u")
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(4, 1fr)",
+      gap: 14,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement(ReportStat, {
+    icon: "users",
+    label: "T\u1ED5ng end-user",
+    value: filtered.length,
+    tone: "info"
+  }), /*#__PURE__*/React.createElement(ReportStat, {
+    icon: "alert",
+    label: "R\u1EE7i ro cao",
+    value: highRisk,
+    tone: highRisk > 0 ? "danger" : "success"
+  }), /*#__PURE__*/React.createElement(ReportStat, {
+    icon: "clock",
+    label: "Trung b\xECnh",
+    value: medRisk,
+    tone: medRisk > 0 ? "warn" : "success"
+  }), /*#__PURE__*/React.createElement(ReportStat, {
+    icon: "check",
+    label: "Th\u1EA5p",
+    value: filtered.length - highRisk - medRisk,
+    tone: "success"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      padding: "12px 20px",
+      marginBottom: 14,
+      background: "#EFF6FF",
+      border: "1px solid #BFDBFE",
+      display: "flex",
+      gap: 10,
+      alignItems: "flex-start",
+      fontSize: 13,
+      color: "#1D4ED8"
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    name: "info",
+    size: 16,
+    stroke: 2,
+    style: {
+      flex: "none",
+      marginTop: 1
+    }
+  }), /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("b", null, "C\xE1ch t\xEDnh r\u1EE7i ro:"), " D\u1EF1a tr\xEAn t\u1ED5ng s\u1ED1 voucher nh\u1EADn, s\u1ED1 \u0111\u01A1n h\xE0ng v\xE0 s\u1ED1 PO kh\xE1c nhau c\u1EE7a 1 s\u1ED1 \u0111i\u1EC7n tho\u1EA1i tr\xEAn to\xE0n h\u1EC7 th\u1ED1ng. R\u1EE7i ro cao: \u0111i\u1EC3m > 40 | Trung b\xECnh: 20\u201340 | Th\u1EA5p: < 20.")), /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      padding: 20,
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr auto",
+      gap: 16,
+      alignItems: "end"
+    }
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "S\u1ED1 \u0111i\u1EC7n tho\u1EA1i"
+  }, /*#__PURE__*/React.createElement(TextInput, {
+    value: draft.phone,
+    onChange: e => setDraft({
+      ...draft,
+      phone: e.target.value
+    }),
+    placeholder: "09xx..."
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "M\u1EE9c r\u1EE7i ro"
+  }, /*#__PURE__*/React.createElement(Select, {
+    value: draft.risk,
+    onChange: e => setDraft({
+      ...draft,
+      risk: e.target.value
+    }),
+    options: [{
+      value: "",
+      label: "Tất cả"
+    }, {
+      value: "high",
+      label: "Rủi ro cao"
+    }, {
+      value: "medium",
+      label: "Trung bình"
+    }, {
+      value: "low",
+      label: "Thấp"
+    }]
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Button, {
+    variant: "ghost",
+    onClick: clearSearch
+  }, "X\xF3a"), /*#__PURE__*/React.createElement(Button, {
+    icon: "search",
+    onClick: applySearch
+  }, "T\xECm")))), /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      overflowX: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("table", {
+    className: "tbl",
+    style: {
+      minWidth: 900
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
+    style: {
+      width: 32
+    }
+  }, "#"), /*#__PURE__*/React.createElement("th", null, "S\u0110T"), /*#__PURE__*/React.createElement("th", null, "T\xCAN"), /*#__PURE__*/React.createElement(SortTh, {
+    label: "T\u1ED5ng voucher",
+    col: "total",
+    sortCol: sortCol,
+    sortDir: sortDir,
+    onSort: onSort
+  }), /*#__PURE__*/React.createElement(SortTh, {
+    label: "\u0110\xE3 d\xF9ng",
+    col: "used",
+    sortCol: sortCol,
+    sortDir: sortDir,
+    onSort: onSort
+  }), /*#__PURE__*/React.createElement(SortTh, {
+    label: "Ch\u01B0a d\xF9ng",
+    col: "unused",
+    sortCol: sortCol,
+    sortDir: sortDir,
+    onSort: onSort
+  }), /*#__PURE__*/React.createElement(SortTh, {
+    label: "H\u1EBFt h\u1EA1n",
+    col: "expired",
+    sortCol: sortCol,
+    sortDir: sortDir,
+    onSort: onSort
+  }), /*#__PURE__*/React.createElement(SortTh, {
+    label: "S\u1ED1 \u0111\u01A1n h\xE0ng",
+    col: "distinctOrders",
+    sortCol: sortCol,
+    sortDir: sortDir,
+    onSort: onSort
+  }), /*#__PURE__*/React.createElement(SortTh, {
+    label: "S\u1ED1 PO",
+    col: "distinctPOs",
+    sortCol: sortCol,
+    sortDir: sortDir,
+    onSort: onSort
+  }), /*#__PURE__*/React.createElement(SortTh, {
+    label: "\u0110i\u1EC3m r\u1EE7i ro",
+    col: "score",
+    sortCol: sortCol,
+    sortDir: sortDir,
+    onSort: onSort
+  }), /*#__PURE__*/React.createElement("th", null, "M\u1EE8C R\u1EE6I RO"))), /*#__PURE__*/React.createElement("tbody", null, pageRows.length === 0 && /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+    colSpan: 11
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "40px 0",
+      textAlign: "center",
+      color: "var(--muted)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 600,
+      color: "var(--ink-body)"
+    }
+  }, "Kh\xF4ng c\xF3 d\u1EEF li\u1EC7u ph\xF9 h\u1EE3p")))), pageRows.map((u, idx) => /*#__PURE__*/React.createElement("tr", {
+    key: u.phone,
+    style: u.risk === "high" ? {
+      background: "#fff9f9"
+    } : u.risk === "medium" ? {
+      background: "#fffdf5"
+    } : undefined
+  }, /*#__PURE__*/React.createElement("td", {
+    style: {
+      color: "var(--muted)",
+      fontSize: 12,
+      textAlign: "center"
+    }
+  }, (cur - 1) * perPage + idx + 1), /*#__PURE__*/React.createElement("td", {
     style: {
       fontFamily: "monospace",
-      fontSize: 12.5,
-      color: "var(--slate)"
+      fontWeight: 700,
+      color: "var(--brand)",
+      fontVariantNumeric: "tabular-nums"
     }
-  }, r.txnRef))))))), /*#__PURE__*/React.createElement(Pagination, {
+  }, u.phone), /*#__PURE__*/React.createElement("td", {
+    style: {
+      fontWeight: 600
+    }
+  }, u.name), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "right",
+      fontWeight: 700,
+      fontVariantNumeric: "tabular-nums"
+    }
+  }, u.total), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "right",
+      fontWeight: 600,
+      color: "#15803d",
+      fontVariantNumeric: "tabular-nums"
+    }
+  }, u.used), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "right",
+      fontWeight: 600,
+      color: "#b45309",
+      fontVariantNumeric: "tabular-nums"
+    }
+  }, u.unused), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "right",
+      color: "var(--muted)",
+      fontVariantNumeric: "tabular-nums"
+    }
+  }, u.expired), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "right",
+      fontVariantNumeric: "tabular-nums"
+    }
+  }, u.distinctOrders), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "right",
+      fontVariantNumeric: "tabular-nums"
+    }
+  }, u.distinctPOs), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "right",
+      fontWeight: 700,
+      fontVariantNumeric: "tabular-nums",
+      color: u.risk === "high" ? "#b91c1c" : u.risk === "medium" ? "#b45309" : "#15803d"
+    }
+  }, u.score), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement(RiskBadge, {
+    risk: u.risk
+  }))))))), /*#__PURE__*/React.createElement(Pagination, {
     page: cur,
     pageCount: pageCount,
     total: filtered.length,
@@ -12610,8 +13105,9 @@ function IssuanceReportPage({
   })));
 }
 Object.assign(window, {
-  ConsolidatedReportPage,
-  IssuanceReportPage
+  OrderReportPage,
+  VoucherReportPage,
+  BehaviorReportPage
 });
 </script>
   <script>
@@ -13442,10 +13938,12 @@ function App() {
         top: 0
       });
     }
-  });else if (current === "report-all") page = /*#__PURE__*/React.createElement(ConsolidatedReportPage, {
-    rows: CONSOLIDATED_REPORT
-  });else if (current === "report-orders") page = /*#__PURE__*/React.createElement(IssuanceReportPage, {
-    rows: ISSUANCE_RECORDS
+  });else if (current === "report-orders") page = /*#__PURE__*/React.createElement(OrderReportPage, {
+    rows: ORDER_REPORT
+  });else if (current === "report-vouchers") page = /*#__PURE__*/React.createElement(VoucherReportPage, {
+    rows: VOUCHER_REPORT
+  });else if (current === "report-behavior") page = /*#__PURE__*/React.createElement(BehaviorReportPage, {
+    rows: BEHAVIOR_REPORT
   });else page = /*#__PURE__*/React.createElement(Placeholder, {
     navKey: current
   });
