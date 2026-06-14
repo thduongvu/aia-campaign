@@ -1556,6 +1556,34 @@ function Icon({
       d: "M21 8l-9-5-9 5 9 5 9-5z"
     }), /*#__PURE__*/React.createElement("path", {
       d: "M3 8v8l9 5 9-5V8M12 13v8"
+    })),
+    voucher: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
+      x: "2",
+      y: "6",
+      width: "20",
+      height: "12",
+      rx: "2"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M9 6v12"
+    }), /*#__PURE__*/React.createElement("circle", {
+      cx: "5.5",
+      cy: "12",
+      r: "1",
+      fill: "currentColor",
+      stroke: "none"
+    })),
+    searchUser: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("circle", {
+      cx: "10",
+      cy: "10",
+      r: "6.5"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M20.5 20.5l-4.5-4.5"
+    }), /*#__PURE__*/React.createElement("circle", {
+      cx: "10",
+      cy: "8.5",
+      r: "2.2"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M6.5 14.5c0-2 1.6-3.5 3.5-3.5s3.5 1.5 3.5 3.5"
     }))
   };
   return /*#__PURE__*/React.createElement("svg", common, P[name] || null);
@@ -2469,36 +2497,46 @@ const NAV_ITEMS = [{
 }, {
   key: "report-vouchers",
   label: "Báo cáo quản lý vouchers",
-  icon: "ticket",
+  icon: "voucher",
   live: true
 }, {
   key: "report-behavior",
   label: "Báo cáo theo dõi hành vi",
-  icon: "users",
+  icon: "searchUser",
   live: true
 }];
 
 // Permission groups (matrix modules) — columns: view / create / edit / delete / export
 const MATRIX_MODULES = [{
-  key: "dashboard",
-  label: "Dashboard",
-  icon: "grid"
+  key: "accounts",
+  label: "Quản lý tài khoản",
+  icon: "users",
+  disabledCols: ["export"]
 }, {
   key: "po",
   label: "Quản lý PO",
-  icon: "clipboard"
+  icon: "clipboard",
+  disabledCols: ["export"]
 }, {
-  key: "campaign",
-  label: "Chiến dịch Voucher",
-  icon: "ticket"
+  key: "orders",
+  label: "Quản lý đơn hàng",
+  icon: "cart",
+  disabledCols: []
 }, {
-  key: "accounts",
-  label: "Quản lý tài khoản",
-  icon: "users"
+  key: "report_orders",
+  label: "Báo cáo đơn hàng",
+  icon: "chart",
+  disabledCols: ["create", "edit", "delete"]
 }, {
-  key: "audit",
-  label: "Nhật ký & Báo cáo",
-  icon: "file"
+  key: "report_vouchers",
+  label: "Báo cáo quản lý vouchers",
+  icon: "voucher",
+  disabledCols: ["create", "edit", "delete"]
+}, {
+  key: "report_behavior",
+  label: "Báo cáo theo dõi hành vi",
+  icon: "searchUser",
+  disabledCols: ["create", "edit", "delete"]
 }];
 const MATRIX_COLS = [{
   key: "view",
@@ -2516,12 +2554,18 @@ const MATRIX_COLS = [{
   key: "export",
   label: "EXPORT"
 }];
-const fullMatrix = v => Object.fromEntries(MATRIX_MODULES.map(m => [m.key, Object.fromEntries(MATRIX_COLS.map(c => [c.key, v]))]));
+
+// Build a matrix respecting disabledCols (disabled cols always false)
+const allowedCols = mk => {
+  const m = MATRIX_MODULES.find(x => x.key === mk);
+  return m ? MATRIX_COLS.filter(c => !m.disabledCols.includes(c.key)).map(c => c.key) : MATRIX_COLS.map(c => c.key);
+};
+const fullMatrix = v => Object.fromEntries(MATRIX_MODULES.map(m => [m.key, Object.fromEntries(MATRIX_COLS.map(c => [c.key, m.disabledCols.includes(c.key) ? false : v]))]));
 function mkMatrix(spec) {
   const m = fullMatrix(false);
   Object.entries(spec).forEach(([mod, cols]) => {
     cols.forEach(c => {
-      if (m[mod]) m[mod][c] = true;
+      if (m[mod] && !MATRIX_MODULES.find(x => x.key === mod)?.disabledCols.includes(c)) m[mod][c] = true;
     });
   });
   return m;
@@ -2537,27 +2581,31 @@ const PERMISSIONS_SEED = [{
 }, {
   id: "p2",
   name: "Quản lý vận hành",
-  desc: "Quản lý PO, chiến dịch voucher và theo dõi đơn hàng.",
+  desc: "Quản lý PO, đơn hàng và theo dõi báo cáo.",
   users: 8,
   created: "15/10/2023",
   status: "active",
   matrix: mkMatrix({
-    dashboard: ["view", "export"],
-    po: ["view", "create", "edit", "export"],
-    campaign: ["view", "create", "edit"],
-    audit: ["view", "export"]
+    accounts: ["view"],
+    po: ["view", "create", "edit"],
+    orders: ["view", "create", "edit", "delete"],
+    report_orders: ["view", "export"],
+    report_vouchers: ["view", "export"],
+    report_behavior: ["view"]
   })
 }, {
   id: "p3",
   name: "Kế toán",
-  desc: "Xem báo cáo tài chính, export dữ liệu và đối soát.",
+  desc: "Xem báo cáo, export dữ liệu và đối soát.",
   users: 5,
   created: "20/10/2023",
   status: "locked",
   matrix: mkMatrix({
-    dashboard: ["view", "export"],
-    po: ["view", "export"],
-    audit: ["view", "export"]
+    po: ["view"],
+    orders: ["view", "export"],
+    report_orders: ["view", "export"],
+    report_vouchers: ["view", "export"],
+    report_behavior: ["view", "export"]
   })
 }, {
   id: "p4",
@@ -2567,33 +2615,34 @@ const PERMISSIONS_SEED = [{
   created: "22/10/2023",
   status: "active",
   matrix: mkMatrix({
-    dashboard: ["view"],
-    campaign: ["view"],
-    audit: ["view"]
+    orders: ["view"],
+    report_orders: ["view"],
+    report_vouchers: ["view"]
   })
 }, {
   id: "p5",
   name: "Cộng tác viên",
-  desc: "Chỉ xem dashboard và chiến dịch đang chạy.",
+  desc: "Chỉ xem đơn hàng đang chạy.",
   users: 11,
   created: "02/11/2023",
   status: "active",
   matrix: mkMatrix({
-    dashboard: ["view"],
-    campaign: ["view"]
+    orders: ["view"]
   })
 }, {
   id: "p6",
   name: "Kiểm toán nội bộ",
-  desc: "Truy cập nhật ký hệ thống và báo cáo, chỉ đọc.",
+  desc: "Truy cập báo cáo hệ thống, chỉ đọc.",
   users: 2,
   created: "10/11/2023",
   status: "locked",
   matrix: mkMatrix({
-    dashboard: ["view"],
-    audit: ["view", "export"],
+    accounts: ["view"],
     po: ["view"],
-    accounts: ["view"]
+    orders: ["view"],
+    report_orders: ["view", "export"],
+    report_vouchers: ["view", "export"],
+    report_behavior: ["view", "export"]
   })
 }];
 
@@ -2651,7 +2700,9 @@ function formatVnd(n) {
 const PO_ACTORS = ["Quản trị viên", "Trần Minh Hoàng", "Lê Thị Mai", "Phạm Tuấn Anh", "Nguyễn Ngọc Tâm"];
 const PO_SEED = [{
   id: "po1",
-  name: "PO-2025-001 · Chiến dịch Tết Nguyên Đán",
+  code: "PO-2025-001",
+  title: "Chiến dịch Tết Nguyên Đán",
+  ownerEmail: "hoang.tran1@voucherpro.vn",
   budget: 2500000000,
   status: "active",
   creator: "Quản trị viên",
@@ -2671,22 +2722,24 @@ const PO_SEED = [{
     actor: "Quản trị viên",
     time: "05/01/2025 09:12",
     changes: [{
+      field: "Số PO",
+      from: "—",
+      to: "PO-2025-001"
+    }, {
       field: "Tên PO",
       from: "—",
-      to: "PO-2025-001 · Chiến dịch Tết Nguyên Đán"
+      to: "Chiến dịch Tết Nguyên Đán"
     }, {
       field: "Ngân sách",
       from: "—",
       to: "2.000.000.000 ₫"
-    }, {
-      field: "Trạng thái",
-      from: "—",
-      to: "Đang hoạt động"
     }]
   }]
 }, {
   id: "po2",
-  name: "PO-2025-002 · Tri ân khách hàng Q1",
+  code: "PO-2025-002",
+  title: "Tri ân khách hàng Q1",
+  ownerEmail: "mai.le2@voucherpro.vn",
   budget: 850000000,
   status: "active",
   creator: "Trần Minh Hoàng",
@@ -2706,22 +2759,24 @@ const PO_SEED = [{
     actor: "Trần Minh Hoàng",
     time: "12/01/2025 10:45",
     changes: [{
+      field: "Số PO",
+      from: "—",
+      to: "PO-2025-002"
+    }, {
       field: "Tên PO",
       from: "—",
-      to: "PO-2025-002 · Tri ân khách hàng Q1"
+      to: "Tri ân khách hàng Q1"
     }, {
       field: "Ngân sách",
       from: "—",
       to: "850.000.000 ₫"
-    }, {
-      field: "Trạng thái",
-      from: "—",
-      to: "Khóa"
     }]
   }]
 }, {
   id: "po3",
-  name: "PO-2025-003 · Voucher sinh nhật thành viên",
+  code: "PO-2025-003",
+  title: "Voucher sinh nhật thành viên",
+  ownerEmail: "mai.le2@voucherpro.vn",
   budget: 420000000,
   status: "active",
   creator: "Lê Thị Mai",
@@ -2732,22 +2787,20 @@ const PO_SEED = [{
     actor: "Lê Thị Mai",
     time: "20/01/2025 16:20",
     changes: [{
-      field: "Tên PO",
+      field: "Số PO",
       from: "—",
-      to: "PO-2025-003 · Voucher sinh nhật thành viên"
+      to: "PO-2025-003"
     }, {
       field: "Ngân sách",
       from: "—",
       to: "420.000.000 ₫"
-    }, {
-      field: "Trạng thái",
-      from: "—",
-      to: "Đang hoạt động"
     }]
   }]
 }, {
   id: "po4",
-  name: "PO-2025-004 · Khuyến mãi Quốc tế Phụ nữ 8/3",
+  code: "PO-2025-004",
+  title: "Khuyến mãi Quốc tế Phụ nữ 8/3",
+  ownerEmail: "anh.pham3@voucherpro.vn",
   budget: 1200000000,
   status: "locked",
   creator: "Phạm Tuấn Anh",
@@ -2761,32 +2814,26 @@ const PO_SEED = [{
       field: "Trạng thái",
       from: "Đang hoạt động",
       to: "Khóa"
-    }, {
-      field: "Ngân sách",
-      from: "1.000.000.000 ₫",
-      to: "1.200.000.000 ₫"
     }]
   }, {
     action: "create",
     actor: "Phạm Tuấn Anh",
     time: "02/02/2025 11:00",
     changes: [{
-      field: "Tên PO",
+      field: "Số PO",
       from: "—",
-      to: "PO-2025-004 · Khuyến mãi Quốc tế Phụ nữ 8/3"
+      to: "PO-2025-004"
     }, {
       field: "Ngân sách",
       from: "—",
       to: "1.000.000.000 ₫"
-    }, {
-      field: "Trạng thái",
-      from: "—",
-      to: "Đang hoạt động"
     }]
   }]
 }, {
   id: "po5",
-  name: "PO-2025-005 · Tích điểm đổi quà mùa hè",
+  code: "PO-2025-005",
+  title: "Tích điểm đổi quà mùa hè",
+  ownerEmail: "tam.nguyen5@voucherpro.vn",
   budget: 680000000,
   status: "active",
   creator: "Nguyễn Ngọc Tâm",
@@ -2797,22 +2844,20 @@ const PO_SEED = [{
     actor: "Nguyễn Ngọc Tâm",
     time: "15/02/2025 13:30",
     changes: [{
-      field: "Tên PO",
+      field: "Số PO",
       from: "—",
-      to: "PO-2025-005 · Tích điểm đổi quà mùa hè"
+      to: "PO-2025-005"
     }, {
       field: "Ngân sách",
       from: "—",
       to: "680.000.000 ₫"
-    }, {
-      field: "Trạng thái",
-      from: "—",
-      to: "Đang hoạt động"
     }]
   }]
 }, {
   id: "po6",
-  name: "PO-2025-006 · Ưu đãi thành viên Bạch Kim",
+  code: "PO-2025-006",
+  title: "Ưu đãi thành viên Bạch Kim",
+  ownerEmail: "hoang.tran1@voucherpro.vn",
   budget: 1750000000,
   status: "active",
   creator: "Quản trị viên",
@@ -2824,30 +2869,28 @@ const PO_SEED = [{
     time: "05/03/2025 10:20",
     changes: [{
       field: "Tên PO",
-      from: "PO-2025-006 · Ưu đãi VIP",
-      to: "PO-2025-006 · Ưu đãi thành viên Bạch Kim"
+      from: "Ưu đãi VIP",
+      to: "Ưu đãi thành viên Bạch Kim"
     }]
   }, {
     action: "create",
     actor: "Quản trị viên",
     time: "01/03/2025 08:50",
     changes: [{
-      field: "Tên PO",
+      field: "Số PO",
       from: "—",
-      to: "PO-2025-006 · Ưu đãi VIP"
+      to: "PO-2025-006"
     }, {
       field: "Ngân sách",
       from: "—",
       to: "1.750.000.000 ₫"
-    }, {
-      field: "Trạng thái",
-      from: "—",
-      to: "Đang hoạt động"
     }]
   }]
 }, {
   id: "po7",
-  name: "PO-2025-007 · Hoàn tiền giao dịch quý 2",
+  code: "PO-2025-007",
+  title: "Hoàn tiền giao dịch quý 2",
+  ownerEmail: "anh.pham3@voucherpro.vn",
   budget: 950000000,
   status: "locked",
   creator: "Lê Thị Mai",
@@ -2867,22 +2910,20 @@ const PO_SEED = [{
     actor: "Lê Thị Mai",
     time: "10/03/2025 15:10",
     changes: [{
-      field: "Tên PO",
+      field: "Số PO",
       from: "—",
-      to: "PO-2025-007 · Hoàn tiền giao dịch quý 2"
+      to: "PO-2025-007"
     }, {
       field: "Ngân sách",
       from: "—",
       to: "950.000.000 ₫"
-    }, {
-      field: "Trạng thái",
-      from: "—",
-      to: "Đang hoạt động"
     }]
   }]
 }, {
   id: "po8",
-  name: "PO-2025-008 · Quà tặng đối tác doanh nghiệp",
+  code: "PO-2025-008",
+  title: "Quà tặng đối tác doanh nghiệp",
+  ownerEmail: "admin@voucherpro.vn",
   budget: 3100000000,
   status: "active",
   creator: "Quản trị viên",
@@ -2893,22 +2934,20 @@ const PO_SEED = [{
     actor: "Quản trị viên",
     time: "18/03/2025 10:00",
     changes: [{
-      field: "Tên PO",
+      field: "Số PO",
       from: "—",
-      to: "PO-2025-008 · Quà tặng đối tác doanh nghiệp"
+      to: "PO-2025-008"
     }, {
       field: "Ngân sách",
       from: "—",
       to: "3.100.000.000 ₫"
-    }, {
-      field: "Trạng thái",
-      from: "—",
-      to: "Đang hoạt động"
     }]
   }]
 }, {
   id: "po9",
-  name: "PO-2025-009 · Flash sale cuối tuần",
+  code: "PO-2025-009",
+  title: "Flash sale cuối tuần",
+  ownerEmail: "tam.nguyen5@voucherpro.vn",
   budget: 320000000,
   status: "active",
   creator: "Phạm Tuấn Anh",
@@ -2928,22 +2967,20 @@ const PO_SEED = [{
     actor: "Phạm Tuấn Anh",
     time: "25/03/2025 09:30",
     changes: [{
-      field: "Tên PO",
+      field: "Số PO",
       from: "—",
-      to: "PO-2025-009 · Flash sale cuối tuần"
+      to: "PO-2025-009"
     }, {
       field: "Ngân sách",
       from: "—",
       to: "300.000.000 ₫"
-    }, {
-      field: "Trạng thái",
-      from: "—",
-      to: "Đang hoạt động"
     }]
   }]
 }, {
   id: "po10",
-  name: "PO-2025-010 · Chương trình giới thiệu bạn bè",
+  code: "PO-2025-010",
+  title: "Chương trình giới thiệu bạn bè",
+  ownerEmail: "tam.nguyen5@voucherpro.vn",
   budget: 540000000,
   status: "active",
   creator: "Nguyễn Ngọc Tâm",
@@ -2954,22 +2991,22 @@ const PO_SEED = [{
     actor: "Nguyễn Ngọc Tâm",
     time: "02/04/2025 14:00",
     changes: [{
-      field: "Tên PO",
+      field: "Số PO",
       from: "—",
-      to: "PO-2025-010 · Chương trình giới thiệu bạn bè"
+      to: "PO-2025-010"
     }, {
       field: "Ngân sách",
       from: "—",
       to: "540.000.000 ₫"
-    }, {
-      field: "Trạng thái",
-      from: "—",
-      to: "Đang hoạt động"
     }]
   }]
 }];
+// derive backward-compat `name` field
+PO_SEED.forEach(p => {
+  p.name = p.title ? `${p.code} · ${p.title}` : p.code;
+});
 
-// add sample "used" budget per PO (remaining = budget - used)
+// add sample "used" budget per PO
 PO_SEED.forEach((p, i) => {
   p.used = Math.round(p.budget * [0.62, 0.35, 0.8, 0.15, 0.5, 0.92, 0.27, 0.7, 0.45, 0.6][i % 10] / 1000) * 1000;
 });
@@ -5284,8 +5321,13 @@ function PermissionMatrix({
   onToggleAll,
   readOnly
 }) {
-  const allOn = MATRIX_MODULES.every(m => MATRIX_COLS.every(c => matrix[m.key][c.key]));
-  const moduleAll = mk => MATRIX_COLS.every(c => matrix[mk][c.key]);
+  // Only count non-disabled cols per module for "all on" logic
+  const allOn = MATRIX_MODULES.every(m => MATRIX_COLS.filter(c => !m.disabledCols.includes(c.key)).every(c => matrix[m.key]?.[c.key]));
+  const moduleAll = mk => {
+    const m = MATRIX_MODULES.find(x => x.key === mk);
+    const activeCols = MATRIX_COLS.filter(c => !m?.disabledCols.includes(c.key));
+    return activeCols.length > 0 && activeCols.every(c => matrix[mk]?.[c.key]);
+  };
   return /*#__PURE__*/React.createElement("div", {
     style: {
       border: "1px solid var(--border)",
@@ -5322,9 +5364,7 @@ function PermissionMatrix({
       color: "var(--brand)",
       display: "flex"
     }
-  }, m.key === "campaign" ? /*#__PURE__*/React.createElement(Ic.ticket, {
-    s: 17
-  }) : /*#__PURE__*/React.createElement(Icon, {
+  }, /*#__PURE__*/React.createElement(Icon, {
     name: m.icon,
     size: 17,
     stroke: 1.8
@@ -5344,7 +5384,8 @@ function PermissionMatrix({
       marginTop: 1
     }
   }, moduleAll(m.key) ? "Bỏ chọn hàng" : "Chọn cả hàng")))), MATRIX_COLS.map(c => {
-    const on = matrix[m.key][c.key];
+    const disabled = m.disabledCols.includes(c.key);
+    const on = !disabled && matrix[m.key]?.[c.key];
     return /*#__PURE__*/React.createElement("td", {
       key: c.key,
       style: {
@@ -5355,7 +5396,27 @@ function PermissionMatrix({
         display: "flex",
         justifyContent: "center"
       }
-    }, readOnly ? on ? /*#__PURE__*/React.createElement("span", {
+    }, disabled ? /*#__PURE__*/React.createElement("span", {
+      title: "Kh\xF4ng \xE1p d\u1EE5ng",
+      style: {
+        width: 22,
+        height: 22,
+        borderRadius: 5,
+        background: "var(--bg)",
+        border: "1.5px dashed var(--border)",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        width: 8,
+        height: 2,
+        background: "var(--border)",
+        borderRadius: 2,
+        display: "inline-block"
+      }
+    })) : readOnly ? on ? /*#__PURE__*/React.createElement("span", {
       style: {
         color: "var(--success-dot)",
         display: "flex"
@@ -5702,6 +5763,8 @@ function PermissionFormPage({
   const [matrix, setMatrix] = useState(() => perm ? JSON.parse(JSON.stringify(perm.matrix)) : fullMatrix(false));
   const [err, setErr] = useState("");
   function toggle(mk, ck) {
+    const mod = MATRIX_MODULES.find(m => m.key === mk);
+    if (mod?.disabledCols.includes(ck)) return; // never toggle disabled
     setMatrix(s => ({
       ...s,
       [mk]: {
@@ -5712,10 +5775,11 @@ function PermissionFormPage({
   }
   function toggleAll(mk, val) {
     setMatrix(s => {
-      if (mk === "*") return fullMatrix(val);
+      if (mk === "*") return fullMatrix(val); // fullMatrix already respects disabledCols
+      const mod = MATRIX_MODULES.find(m => m.key === mk);
       return {
         ...s,
-        [mk]: Object.fromEntries(MATRIX_COLS.map(c => [c.key, val]))
+        [mk]: Object.fromEntries(MATRIX_COLS.map(c => [c.key, mod?.disabledCols.includes(c.key) ? false : val]))
       };
     });
   }
@@ -6058,7 +6122,7 @@ function PoPage({
     }
   }, /*#__PURE__*/React.createElement("table", {
     className: "tbl tbl-po"
-  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", null, "T\xCAN PO"), /*#__PURE__*/React.createElement("th", {
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", null, "S\u1ED0 PO"), /*#__PURE__*/React.createElement("th", null, "T\xCAN PO"), /*#__PURE__*/React.createElement("th", {
     style: {
       textAlign: "right"
     }
@@ -6070,7 +6134,7 @@ function PoPage({
     style: {
       textAlign: "right"
     }
-  }, "C\xD2N L\u1EA0I"), /*#__PURE__*/React.createElement("th", null, "TR\u1EA0NG TH\xC1I"), /*#__PURE__*/React.createElement("th", null, "NG\u01AF\u1EDCI C\u1EACP NH\u1EACT"), /*#__PURE__*/React.createElement("th", null, "TH\u1EDCI GIAN T\u1EA0O"), /*#__PURE__*/React.createElement("th", {
+  }, "C\xD2N L\u1EA0I"), /*#__PURE__*/React.createElement("th", null, "TR\u1EA0NG TH\xC1I"), /*#__PURE__*/React.createElement("th", null, "USER PH\u1EE4 TR\xC1CH"), /*#__PURE__*/React.createElement("th", {
     style: {
       textAlign: "right"
     }
@@ -6102,89 +6166,104 @@ function PoPage({
       fontSize: 13,
       marginTop: 4
     }
-  }, "Th\u1EED \u0111i\u1EC1u ch\u1EC9nh b\u1ED9 l\u1ECDc ho\u1EB7c x\xF3a \u0111i\u1EC1u ki\u1EC7n t\xECm ki\u1EBFm.")))), rows.map(p => /*#__PURE__*/React.createElement("tr", {
-    key: p.id
-  }, /*#__PURE__*/React.createElement("td", {
-    style: {
-      whiteSpace: "nowrap"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 600
-    }
-  }, p.name)), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "right",
-      fontWeight: 600,
-      fontVariantNumeric: "tabular-nums",
-      whiteSpace: "nowrap"
-    }
-  }, formatVnd(p.budget), " ", /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: "var(--muted)",
-      fontWeight: 500
-    }
-  }, "\u20AB")), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "right",
-      fontVariantNumeric: "tabular-nums",
-      whiteSpace: "nowrap",
-      color: "var(--warn-ink)"
-    }
-  }, formatVnd(p.used || 0), " ", /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: "var(--muted)",
-      fontWeight: 500
-    }
-  }, "\u20AB")), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "right",
-      fontWeight: 700,
-      fontVariantNumeric: "tabular-nums",
-      whiteSpace: "nowrap",
-      color: "var(--success-ink)"
-    }
-  }, formatVnd(p.budget - (p.used || 0)), " ", /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: "var(--muted)",
-      fontWeight: 500
-    }
-  }, "\u20AB")), /*#__PURE__*/React.createElement("td", {
-    style: {
-      whiteSpace: "nowrap"
-    }
-  }, /*#__PURE__*/React.createElement(StatusPill, {
-    status: p.status
-  })), /*#__PURE__*/React.createElement("td", {
-    style: {
-      whiteSpace: "nowrap"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: "var(--ink-body)"
-    }
-  }, p.updater)), /*#__PURE__*/React.createElement("td", {
-    style: {
-      whiteSpace: "nowrap"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: "var(--ink-body)"
-    }
-  }, p.created)), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 4,
-      justifyContent: "flex-end"
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "icon-btn brand",
-    title: "C\u1EADp nh\u1EADt",
-    onClick: () => onEdit(p)
-  }, /*#__PURE__*/React.createElement(Icon, {
-    name: "edit",
-    size: 17
-  }))))))))), /*#__PURE__*/React.createElement(Pagination, {
+  }, "Th\u1EED \u0111i\u1EC1u ch\u1EC9nh b\u1ED9 l\u1ECDc ho\u1EB7c x\xF3a \u0111i\u1EC1u ki\u1EC7n t\xECm ki\u1EBFm.")))), rows.map(p => {
+    const owner = ACCOUNTS_SEED.find(a => a.email === p.ownerEmail);
+    return /*#__PURE__*/React.createElement("tr", {
+      key: p.id
+    }, /*#__PURE__*/React.createElement("td", {
+      style: {
+        whiteSpace: "nowrap"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "monospace",
+        fontWeight: 700,
+        color: "var(--brand)"
+      }
+    }, p.code)), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 600
+      }
+    }, p.title || /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "var(--muted)"
+      }
+    }, "\u2014"))), /*#__PURE__*/React.createElement("td", {
+      style: {
+        textAlign: "right",
+        fontWeight: 600,
+        fontVariantNumeric: "tabular-nums",
+        whiteSpace: "nowrap"
+      }
+    }, formatVnd(p.budget), " ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "var(--muted)",
+        fontWeight: 500
+      }
+    }, "\u20AB")), /*#__PURE__*/React.createElement("td", {
+      style: {
+        textAlign: "right",
+        fontVariantNumeric: "tabular-nums",
+        whiteSpace: "nowrap",
+        color: "var(--warn-ink)"
+      }
+    }, formatVnd(p.used || 0), " ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "var(--muted)",
+        fontWeight: 500
+      }
+    }, "\u20AB")), /*#__PURE__*/React.createElement("td", {
+      style: {
+        textAlign: "right",
+        fontWeight: 700,
+        fontVariantNumeric: "tabular-nums",
+        whiteSpace: "nowrap",
+        color: "var(--success-ink)"
+      }
+    }, formatVnd(p.budget - (p.used || 0)), " ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "var(--muted)",
+        fontWeight: 500
+      }
+    }, "\u20AB")), /*#__PURE__*/React.createElement("td", {
+      style: {
+        whiteSpace: "nowrap"
+      }
+    }, /*#__PURE__*/React.createElement(StatusPill, {
+      status: p.status
+    })), /*#__PURE__*/React.createElement("td", {
+      style: {
+        whiteSpace: "nowrap"
+      }
+    }, owner ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontSize: 13
+      }
+    }, owner.name), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: "var(--muted)"
+      }
+    }, owner.email)) : /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "var(--muted)"
+      }
+    }, "\u2014")), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 4,
+        justifyContent: "flex-end"
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "icon-btn brand",
+      title: "C\u1EADp nh\u1EADt",
+      onClick: () => onEdit(p)
+    }, /*#__PURE__*/React.createElement(Icon, {
+      name: "edit",
+      size: 17
+    })))));
+  })))), /*#__PURE__*/React.createElement(Pagination, {
     page: cur,
     pageCount: pageCount,
     total: filtered.length,
@@ -6198,24 +6277,36 @@ function PoAddModal({
   onClose,
   onSave
 }) {
-  const [name, setName] = useState("");
+  const [poCode, setPoCode] = useState("");
+  const [title, setTitle] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
   const [budget, setBudget] = useState("");
   const [status, setStatus] = useState("active");
   const [err, setErr] = useState({});
+  const ownerOpts = ACCOUNTS_SEED.map(a => ({
+    value: a.email,
+    label: `${a.name} - ${a.email}`
+  }));
   function save() {
     const e = {};
-    if (!name.trim()) e.name = "Vui lòng nhập tên PO";
+    if (!poCode.trim()) e.poCode = "Vui lòng nhập số PO";
+    if (!ownerEmail) e.ownerEmail = "Vui lòng chọn user phụ trách";
     if (budget === "" || budget === null || Number(budget) <= 0) e.budget = "Vui lòng nhập ngân sách hợp lệ";
     setErr(e);
     if (Object.keys(e).length) return;
+    const code = poCode.trim();
+    const name = title.trim() ? `${code} · ${title.trim()}` : code;
     onSave({
-      name: name.trim(),
+      code,
+      title: title.trim(),
+      name,
+      ownerEmail,
       budget: Number(budget),
       status
     });
   }
   return /*#__PURE__*/React.createElement(Modal, {
-    width: 520,
+    width: 540,
     onClose: onClose
   }, /*#__PURE__*/React.createElement(ModalHead, {
     icon: "clipboard",
@@ -6231,25 +6322,48 @@ function PoAddModal({
       gap: 18
     }
   }, /*#__PURE__*/React.createElement(Field, {
-    label: "T\xEAn PO",
+    label: "S\u1ED1 PO",
     required: true,
-    error: err.name
+    error: err.poCode,
+    hint: "S\u1ED1 PO \u0111\u01B0\u1EE3c \u0111\u1EC1 c\u1EADp t\u1EA1i email"
   }, /*#__PURE__*/React.createElement(TextInput, {
-    value: name,
+    value: poCode,
     onChange: e => {
-      setName(e.target.value);
+      setPoCode(e.target.value);
       setErr(s => ({
         ...s,
-        name: undefined
+        poCode: undefined
       }));
     },
-    placeholder: "VD: PO-2025-011 \xB7 Chi\u1EBFn d\u1ECBch khuy\u1EBFn m\xE3i",
-    invalid: !!err.name
+    placeholder: "PO-2025-011",
+    invalid: !!err.poCode
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "T\xEAn PO"
+  }, /*#__PURE__*/React.createElement(TextInput, {
+    value: title,
+    onChange: e => setTitle(e.target.value),
+    placeholder: "VD: Chi\u1EBFn d\u1ECBch khuy\u1EBFn m\xE3i h\xE8 2025"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "User ph\u1EE5 tr\xE1ch",
+    required: true,
+    error: err.ownerEmail,
+    hint: "Ch\u1EC9 user ph\u1EE5 tr\xE1ch m\u1EDBi c\xF3 th\u1EC3 ch\u1ECDn \u0111\u1EC3 s\u1EED d\u1EE5ng PO n\xE0y"
+  }, /*#__PURE__*/React.createElement(SearchSelect, {
+    value: ownerEmail,
+    onChange: v => {
+      setOwnerEmail(v);
+      setErr(s => ({
+        ...s,
+        ownerEmail: undefined
+      }));
+    },
+    options: ownerOpts,
+    placeholder: "T\xECm theo t\xEAn ho\u1EB7c email...",
+    invalid: !!err.ownerEmail
   })), /*#__PURE__*/React.createElement(Field, {
     label: "Ng\xE2n s\xE1ch",
     required: true,
-    error: err.budget,
-    hint: !err.budget ? "Đơn vị: VND" : undefined
+    error: err.budget
   }, /*#__PURE__*/React.createElement(BudgetInput, {
     value: budget,
     onChange: v => {
@@ -6280,8 +6394,12 @@ function PoAddModal({
 
 /* ── PO info group (shared by add + edit) ── */
 function PoInfoCard({
-  name,
-  setName,
+  poCode,
+  setPoCode,
+  title,
+  setTitle,
+  ownerEmail,
+  setOwnerEmail,
   budget,
   setBudget,
   status,
@@ -6291,6 +6409,10 @@ function PoInfoCard({
   used
 }) {
   const remaining = (Number(budget) || 0) - (used || 0);
+  const ownerOpts = ACCOUNTS_SEED.map(a => ({
+    value: a.email,
+    label: `${a.name} - ${a.email}`
+  }));
   return /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
@@ -6319,19 +6441,36 @@ function PoInfoCard({
       gap: 18
     }
   }, /*#__PURE__*/React.createElement(Field, {
-    label: "T\xEAn PO",
+    label: "S\u1ED1 PO",
     required: true,
-    error: err.name
+    error: err.poCode,
+    hint: "S\u1ED1 PO \u0111\u01B0\u1EE3c \u0111\u1EC1 c\u1EADp t\u1EA1i email"
   }, /*#__PURE__*/React.createElement(TextInput, {
-    value: name,
-    onChange: e => setName(e.target.value),
-    placeholder: "VD: PO-2025-011 \xB7 Chi\u1EBFn d\u1ECBch khuy\u1EBFn m\xE3i",
-    invalid: !!err.name
+    value: poCode,
+    onChange: e => setPoCode(e.target.value),
+    placeholder: "PO-2025-011",
+    invalid: !!err.poCode
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "T\xEAn PO"
+  }, /*#__PURE__*/React.createElement(TextInput, {
+    value: title,
+    onChange: e => setTitle(e.target.value),
+    placeholder: "VD: Chi\u1EBFn d\u1ECBch khuy\u1EBFn m\xE3i"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "User ph\u1EE5 tr\xE1ch",
+    required: true,
+    error: err.ownerEmail,
+    hint: "Ch\u1EC9 user ph\u1EE5 tr\xE1ch m\u1EDBi c\xF3 th\u1EC3 ch\u1ECDn \u0111\u1EC3 s\u1EED d\u1EE5ng PO n\xE0y"
+  }, /*#__PURE__*/React.createElement(SearchSelect, {
+    value: ownerEmail,
+    onChange: setOwnerEmail,
+    options: ownerOpts,
+    placeholder: "T\xECm theo t\xEAn ho\u1EB7c email...",
+    invalid: !!err.ownerEmail
   })), /*#__PURE__*/React.createElement(Field, {
     label: "Ng\xE2n s\xE1ch",
     required: true,
-    error: err.budget,
-    hint: !err.budget ? "Đơn vị: VND" : undefined
+    error: err.budget
   }, /*#__PURE__*/React.createElement(BudgetInput, {
     value: budget,
     onChange: setBudget,
@@ -6385,13 +6524,16 @@ function PoFormPage({
   onSave
 }) {
   const editing = !!po;
-  const [name, setName] = useState(po?.name || "");
+  const [poCode, setPoCode] = useState(po?.code || "");
+  const [title, setTitle] = useState(po?.title || "");
+  const [ownerEmail, setOwnerEmail] = useState(po?.ownerEmail || "");
   const [budget, setBudget] = useState(po ? po.budget : "");
   const [status, setStatus] = useState(po?.status || "active");
   const [err, setErr] = useState({});
   function save() {
     const e = {};
-    if (!name.trim()) e.name = "Vui lòng nhập tên PO";
+    if (!poCode.trim()) e.poCode = "Vui lòng nhập số PO";
+    if (!ownerEmail) e.ownerEmail = "Vui lòng chọn user phụ trách";
     if (budget === "" || budget === null || Number(budget) <= 0) e.budget = "Vui lòng nhập ngân sách hợp lệ";
     setErr(e);
     if (Object.keys(e).length) {
@@ -6401,13 +6543,18 @@ function PoFormPage({
       });
       return;
     }
+    const code = poCode.trim();
+    const name = title.trim() ? `${code} · ${title.trim()}` : code;
     onSave({
-      name: name.trim(),
+      code,
+      title: title.trim(),
+      name,
+      ownerEmail,
       budget: Number(budget),
       status
     });
   }
-  const title = editing ? "Cập nhật PO" : "Thêm mới PO";
+  const pageTitle = editing ? "Cập nhật PO" : "Thêm mới PO";
   return /*#__PURE__*/React.createElement(PageWrap, null, /*#__PURE__*/React.createElement(PageHeader, {
     crumb: /*#__PURE__*/React.createElement("div", {
       className: "breadcrumb"
@@ -6419,8 +6566,8 @@ function PoFormPage({
       stroke: 2
     }), /*#__PURE__*/React.createElement("span", {
       className: "cur"
-    }, title)),
-    title: title,
+    }, pageTitle)),
+    title: pageTitle,
     sub: editing ? "Chỉnh sửa thông tin PO và xem lịch sử hoạt động." : "Khởi tạo Purchase Order mới.",
     actions: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Button, {
       variant: "ghost",
@@ -6438,8 +6585,12 @@ function PoFormPage({
       alignItems: "start"
     }
   }, /*#__PURE__*/React.createElement(PoInfoCard, {
-    name: name,
-    setName: setName,
+    poCode: poCode,
+    setPoCode: setPoCode,
+    title: title,
+    setTitle: setTitle,
+    ownerEmail: ownerEmail,
+    setOwnerEmail: setOwnerEmail,
     budget: budget,
     setBudget: setBudget,
     status: status,
@@ -6451,12 +6602,16 @@ function PoFormPage({
     history: po.history
   })) : /*#__PURE__*/React.createElement("div", {
     style: {
-      maxWidth: 520,
+      maxWidth: 560,
       margin: "0 auto"
     }
   }, /*#__PURE__*/React.createElement(PoInfoCard, {
-    name: name,
-    setName: setName,
+    poCode: poCode,
+    setPoCode: setPoCode,
+    title: title,
+    setTitle: setTitle,
+    ownerEmail: ownerEmail,
+    setOwnerEmail: setOwnerEmail,
     budget: budget,
     setBudget: setBudget,
     status: status,
